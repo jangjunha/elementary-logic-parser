@@ -32,11 +32,11 @@ pub fn exp(s: &str) -> IResult<&str, Exp> {
 
 fn _explicit_ind_sym(s: &str) -> IResult<&str, Vec<&str>> {
     let (s1, n) = dim(s)?;
-    count(ind_sym, n as usize)(s1)
+    count(preceded(multispace0, ind_sym), n as usize)(s1)
 }
 
 fn _implicit_ind_sym(s: &str) -> IResult<&str, Vec<&str>> {
-    many0(ind_sym)(s)
+    many0(preceded(multispace0, ind_sym))(s)
 }
 
 fn atom_exp(s: &str) -> IResult<&str, Exp> {
