@@ -1,4 +1,4 @@
-use super::individual_constant::{dim, ind_sym, pre};
+use super::individual_constant::{dim, ind_sym, pre, var};
 use super::util::ws;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -114,10 +114,42 @@ fn parenthesesed_exp(s: &str) -> IResult<&str, Exp> {
     delimited(tag("("), ws(exp), tag(")"))(s)
 }
 
+fn existential(s: &str) -> IResult<&str, &str> {
+    tag("∃")(s)
+}
+
+fn univ_genr_exp(s: &str) -> IResult<&str, Exp> {
+    map(
+        pair(
+            delimited(tag("("), ws(var), tag(")")),
+            preceded(multispace0, f),
+        ),
+        |(v, e)| Exp::UnivGenr(v.to_owned(), Box::new(e)),
+    )(s)
+}
+
+fn exist_genr_exp(s: &str) -> IResult<&str, Exp> {
+    map(
+        pair(
+            delimited(
+                tuple((tag("("), preceded(multispace0, existential))),
+                ws(var),
+                tag(")"),
+            ),
+            preceded(multispace0, f),
+        ),
+        |(v, e)| Exp::ExistGenr(v.to_owned(), Box::new(e)),
+    )(s)
+}
+
+fn genr_exp(s: &str) -> IResult<&str, Exp> {
+    alt((exist_genr_exp, univ_genr_exp))(s)
+}
+
 fn falsum(s: &str) -> IResult<&str, Exp> {
     value(Exp::Falsum, tag("⊥"))(s)
 }
 
 fn f(s: &str) -> IResult<&str, Exp> {
-    alt((atom_exp, falsum, parenthesesed_exp))(s)
+    alt((atom_exp, falsum, genr_exp, parenthesesed_exp))(s)
 }

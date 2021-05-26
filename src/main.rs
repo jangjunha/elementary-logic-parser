@@ -1,11 +1,11 @@
 mod parse;
 
-use std::io::{self, Read};
+use std::io::{self};
 
 use parse::exp;
 
 fn main() {
-    println!("Hi! ⊥∨→↔");
+    println!("Hi! ∃⊥∨→↔");
     println!("Type expression: ");
 
     let mut buffer = String::new();
