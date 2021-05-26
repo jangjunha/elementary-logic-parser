@@ -153,3 +153,90 @@ fn falsum(s: &str) -> IResult<&str, Exp> {
 fn f(s: &str) -> IResult<&str, Exp> {
     alt((atom_exp, falsum, genr_exp, parenthesesed_exp))(s)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nom::IResult;
+
+    // ∃⊥∨→↔
+
+    #[test]
+    fn exp_valid() {
+        let exp1 = Exp::Iff(
+            Box::new(Exp::ExistGenr(
+                "y",
+                Box::new(Exp::And(
+                    Box::new(Exp::Atom("F", vec!["y"])),
+                    Box::new(Exp::Atom("G", vec!["y", "y"])),
+                )),
+            )),
+            Box::new(Exp::ExistGenr(
+                "y",
+                Box::new(Exp::And(
+                    Box::new(Exp::Atom("F", vec!["y"])),
+                    Box::new(Exp::ExistGenr(
+                        "x",
+                        Box::new(Exp::And(
+                            Box::new(Exp::Atom("F", vec!["x"])),
+                            Box::new(Exp::Atom("G", vec!["y", "x"])),
+                        )),
+                    )),
+                )),
+            )),
+        );
+        assert_eq!(
+            exp("(∃y)(Fy & Gyy) ↔ (∃y)(Fy & (∃x)(Fx & Gyx))"),
+            IResult::Ok(("", exp1.clone()))
+        );
+        assert_eq!(
+            exp("( ∃ y )(Fy&Gyy) <-> (∃y)( F y & (∃x)( F x & G yx ))"),
+            IResult::Ok(("", exp1.clone()))
+        );
+    }
+
+    #[test]
+    fn atom_exp_valid() {
+        assert_eq!(atom_exp("P"), IResult::Ok(("", Exp::Atom("P", vec![]))));
+        assert_eq!(
+            atom_exp("P_10"),
+            IResult::Ok(("", Exp::Atom("P_10", vec![])))
+        );
+        assert_eq!(
+            atom_exp("R_2^3xya"),
+            IResult::Ok(("", Exp::Atom("R_2", vec!["x", "y", "a"])))
+        );
+        assert_eq!(
+            atom_exp("R_2xy_2a"),
+            IResult::Ok(("", Exp::Atom("R_2", vec!["x", "y_2", "a"])))
+        );
+        assert_eq!(
+            atom_exp("R_2 x y a"),
+            IResult::Ok(("", Exp::Atom("R_2", vec!["x", "y", "a"])))
+        );
+    }
+
+    #[test]
+    fn atom_exp_invalid() {
+        assert_eq!(
+            atom_exp("P^2AB"),
+            IResult::Ok(("^2AB", Exp::Atom("P", vec![])))
+        );
+        assert_eq!(
+            atom_exp("P^2x"),
+            IResult::Ok(("^2x", Exp::Atom("P", vec![])))
+        );
+        assert_eq!(
+            atom_exp("P^2xyz"),
+            IResult::Ok(("z", Exp::Atom("P", vec!["x", "y"])))
+        );
+        assert_eq!(
+            atom_exp("P ^2"),
+            IResult::Ok((" ^2", Exp::Atom("P", vec![])))
+        );
+        assert_eq!(
+            atom_exp("R^1_2x"),
+            IResult::Ok(("^1_2x", Exp::Atom("R", vec![])))
+        );
+    }
+}
