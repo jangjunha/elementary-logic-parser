@@ -14,15 +14,15 @@ use nom::sequence::tuple;
 use nom::IResult;
 
 #[derive(PartialEq, Clone, Debug)]
-pub enum Exp {
-    Atom(String, Vec<String>),
-    Cond(Box<Exp>, Box<Exp>),
-    Iff(Box<Exp>, Box<Exp>),
-    And(Box<Exp>, Box<Exp>),
-    Or(Box<Exp>, Box<Exp>),
-    Neg(Box<Exp>),
-    UnivGenr(String, Box<Exp>),
-    ExistGenr(String, Box<Exp>),
+pub enum Exp<'a> {
+    Atom(&'a str, Vec<&'a str>),
+    Cond(Box<Exp<'a>>, Box<Exp<'a>>),
+    Iff(Box<Exp<'a>>, Box<Exp<'a>>),
+    And(Box<Exp<'a>>, Box<Exp<'a>>),
+    Or(Box<Exp<'a>>, Box<Exp<'a>>),
+    Neg(Box<Exp<'a>>),
+    UnivGenr(&'a str, Box<Exp<'a>>),
+    ExistGenr(&'a str, Box<Exp<'a>>),
     Falsum,
 }
 
@@ -42,7 +42,7 @@ fn _implicit_ind_sym(s: &str) -> IResult<&str, Vec<&str>> {
 fn atom_exp(s: &str) -> IResult<&str, Exp> {
     map(
         pair(pre, alt((_explicit_ind_sym, _implicit_ind_sym))),
-        |(p, i)| Exp::Atom(p.to_owned(), i.iter().map(|&s| s.to_owned()).collect()),
+        |(p, i)| Exp::Atom(p, i),
     )(s)
 }
 
@@ -124,7 +124,7 @@ fn univ_genr_exp(s: &str) -> IResult<&str, Exp> {
             delimited(tag("("), ws(var), tag(")")),
             preceded(multispace0, f),
         ),
-        |(v, e)| Exp::UnivGenr(v.to_owned(), Box::new(e)),
+        |(v, e)| Exp::UnivGenr(v, Box::new(e)),
     )(s)
 }
 
@@ -138,7 +138,7 @@ fn exist_genr_exp(s: &str) -> IResult<&str, Exp> {
             ),
             preceded(multispace0, f),
         ),
-        |(v, e)| Exp::ExistGenr(v.to_owned(), Box::new(e)),
+        |(v, e)| Exp::ExistGenr(v, Box::new(e)),
     )(s)
 }
 
