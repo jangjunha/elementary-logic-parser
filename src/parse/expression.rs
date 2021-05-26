@@ -56,14 +56,14 @@ fn left_right_arrow(s: &str) -> IResult<&str, &str> {
 
 fn if_exp(s: &str) -> IResult<&str, Exp> {
     map(
-        tuple((cond_exp, ws(right_arrow), bool_exp)),
+        tuple((bool_exp, ws(right_arrow), cond_exp)),
         |(lhs, _, rhs)| Exp::Cond(Box::new(lhs), Box::new(rhs)),
     )(s)
 }
 
 fn iff_exp(s: &str) -> IResult<&str, Exp> {
     map(
-        tuple((cond_exp, ws(left_right_arrow), bool_exp)),
+        tuple((bool_exp, ws(left_right_arrow), cond_exp)),
         |(lhs, _, rhs)| Exp::Iff(Box::new(lhs), Box::new(rhs)),
     )(s)
 }
@@ -77,7 +77,7 @@ fn and(s: &str) -> IResult<&str, &str> {
 }
 
 fn and_exp(s: &str) -> IResult<&str, Exp> {
-    map(tuple((bool_exp, ws(and), neg_exp)), |(lhs, _, rhs)| {
+    map(tuple((neg_exp, ws(and), bool_exp)), |(lhs, _, rhs)| {
         Exp::And(Box::new(lhs), Box::new(rhs))
     })(s)
 }
@@ -87,7 +87,7 @@ fn or(s: &str) -> IResult<&str, &str> {
 }
 
 fn or_exp(s: &str) -> IResult<&str, Exp> {
-    map(tuple((bool_exp, ws(or), neg_exp)), |(lhs, _, rhs)| {
+    map(tuple((neg_exp, ws(or), bool_exp)), |(lhs, _, rhs)| {
         Exp::Or(Box::new(lhs), Box::new(rhs))
     })(s)
 }
