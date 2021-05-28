@@ -6,5 +6,9 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# [lib]
+# crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 nom = "6.1.2"
+yew = "0.18.0"
