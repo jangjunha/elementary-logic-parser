@@ -67,7 +67,7 @@ pub fn and_exclude(s: &str) -> IResult<&str, DerivationRule> {
 pub fn or_intro(s: &str) -> IResult<&str, DerivationRule> {
     map(
         terminated(
-            separated_pair(num, sep, opt(num)),
+            pair(num, opt(preceded(sep, num))),
             preceded(multispace1, pair(or, tag("I"))),
         ),
         |(k, l)| DerivationRule::OrIntro(k, l),
@@ -107,7 +107,7 @@ pub fn iff_intro(s: &str) -> IResult<&str, DerivationRule> {
             separated_pair(num, sep, num),
             preceded(multispace1, pair(left_right_arrow, tag("I"))),
         ),
-        |(k, l)| DerivationRule::IfExclude(k, l),
+        |(k, l)| DerivationRule::IffIntro(k, l),
     )(s)
 }
 
@@ -180,6 +180,7 @@ pub fn derivation_rule(s: &str) -> IResult<&str, DerivationRule> {
         if_exclude,
         iff_intro,
         iff_exclude,
+        falsum,
         neg_intro,
         neg_exclude,
         univ_qunt_intro,
