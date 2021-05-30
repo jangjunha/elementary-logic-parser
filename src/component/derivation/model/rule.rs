@@ -103,14 +103,72 @@ impl DerivationRule {
             NAME_UNIV_QUNT_EXCLUDE => Ok(Self::UnivQuntExclude(None)),
             NAME_EXIS_QUNT_INTRO => Ok(Self::ExisQuntIntro(None)),
             NAME_EXIS_QUNT_EXCLUDE => Ok(Self::ExisQuntExclude(None, (None, None))),
-            _ => Err(())
+            _ => Err(()),
+        }
+    }
+
+    pub fn filled_next(&self, next_id: i32) -> Self {
+        let next = Some(next_id);
+        match self {
+            Self::Premise => Self::Premise,
+            Self::AndIntro(None, l) => Self::AndIntro(next, *l),
+            Self::AndIntro(k, None) => Self::AndIntro(*k, next),
+            Self::AndIntro(Some(_), Some(_)) => Self::AndIntro(next, None),
+            Self::AndExclude(_) => Self::AndExclude(next),
+            Self::OrIntro(None, l) => Self::OrIntro(next, *l),
+            Self::OrIntro(k, None) => Self::OrIntro(*k, next),
+            Self::OrIntro(_, _) => Self::OrIntro(next, None),
+            Self::OrExclude(None, (l1, m1), (l2, m2)) => {
+                Self::OrExclude(next, (*l1, *m1), (*l2, *m2))
+            }
+            Self::OrExclude(k, (None, m1), (l2, m2)) => {
+                Self::OrExclude(*k, (next, *m1), (*l2, *m2))
+            }
+            Self::OrExclude(k, (l1, None), (l2, m2)) => {
+                Self::OrExclude(*k, (*l1, next), (*l2, *m2))
+            }
+            Self::OrExclude(k, (l1, m1), (None, m2)) => {
+                Self::OrExclude(*k, (*l1, *m1), (next, *m2))
+            }
+            Self::OrExclude(k, (l1, m1), (l2, None)) => {
+                Self::OrExclude(*k, (*l1, *m1), (*l2, next))
+            }
+            Self::OrExclude(Some(_), (Some(_), Some(_)), (Some(_), Some(_))) => {
+                Self::OrExclude(next, (None, None), (None, None))
+            }
+            Self::IfIntro((None, l)) => Self::IfIntro((next, *l)),
+            Self::IfIntro((k, None)) => Self::IfIntro((*k, next)),
+            Self::IfIntro((Some(_), Some(_))) => Self::IfIntro((next, None)),
+            Self::IfExclude(None, l) => Self::IfExclude(next, *l),
+            Self::IfExclude(k, None) => Self::IfExclude(*k, next),
+            Self::IfExclude(Some(_), Some(_)) => Self::IfExclude(next, None),
+            Self::IffIntro(None, l) => Self::IffIntro(next, *l),
+            Self::IffIntro(k, None) => Self::IffIntro(*k, next),
+            Self::IffIntro(Some(_), Some(_)) => Self::IffIntro(next, None),
+            Self::IffExclude(_) => Self::IffExclude(next),
+
+            Self::NegIntro((None, l)) => Self::NegIntro((next, *l)),
+            Self::NegIntro((k, None)) => Self::NegIntro((*k, next)),
+            Self::NegIntro((Some(_), Some(_))) => Self::NegIntro((next, None)),
+            Self::NegExclude((None, l)) => Self::NegExclude((next, *l)),
+            Self::NegExclude((k, None)) => Self::NegExclude((*k, next)),
+            Self::NegExclude((Some(_), Some(_))) => Self::NegExclude((next, None)),
+            Self::UnivQuntIntro(_) => Self::UnivQuntIntro(next),
+            Self::UnivQuntExclude(_) => Self::UnivQuntExclude(next),
+            Self::ExisQuntIntro(_) => Self::ExisQuntIntro(next),
+            Self::ExisQuntExclude(None, (l, m)) => Self::ExisQuntExclude(next, (*l, *m)),
+            Self::ExisQuntExclude(k, (None, m)) => Self::ExisQuntExclude(*k, (next, *m)),
+            Self::ExisQuntExclude(k, (l, None)) => Self::ExisQuntExclude(*k, (*l, next)),
+            Self::ExisQuntExclude(Some(_), (Some(_), Some(_))) => {
+                Self::ExisQuntExclude(next, (None, None))
+            }
         }
     }
 }
 
 impl ToString for DerivationRule {
     fn to_string(&self) -> String {
-        to_string(self)
+        to_string(self, |i| i.map_or_else(|| "".to_owned(), |e| e.to_string()))
     }
 }
 
@@ -119,7 +177,9 @@ impl Serialize for DerivationRule {
     where
         S: ser::Serializer,
     {
-        serializer.serialize_str(&to_string(self))
+        serializer.serialize_str(&to_string(self, |i| {
+            i.map_or_else(|| "".to_owned(), |e| e.to_string())
+        }))
     }
 }
 
@@ -160,8 +220,11 @@ pub enum Error {
     ParseError,
 }
 
-pub fn to_string(value: &DerivationRule) -> String {
-    let fmt = |i: &Option<i32>| -> String { i.map_or_else(|| "".to_owned(), |e| e.to_string()) };
+pub fn to_string<F>(value: &DerivationRule, format_id: F) -> String
+where
+    F: Fn(&Option<i32>) -> String,
+{
+    let fmt = format_id;
     match value {
         DerivationRule::Premise => "P".to_owned(),
         DerivationRule::AndIntro(k, l) => {

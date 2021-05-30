@@ -1,6 +1,7 @@
 use super::common::{and, existential, left_right_arrow, negation, or, right_arrow};
 use super::individual_constant::{dim, ind_sym, pre, var};
 use super::util::ws;
+use super::Exp;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::multispace0;
@@ -13,19 +14,6 @@ use nom::sequence::pair;
 use nom::sequence::preceded;
 use nom::sequence::tuple;
 use nom::IResult;
-
-#[derive(PartialEq, Clone, Debug)]
-pub enum Exp<'a> {
-    Atom(&'a str, Vec<&'a str>),
-    Cond(Box<Exp<'a>>, Box<Exp<'a>>),
-    Iff(Box<Exp<'a>>, Box<Exp<'a>>),
-    And(Box<Exp<'a>>, Box<Exp<'a>>),
-    Or(Box<Exp<'a>>, Box<Exp<'a>>),
-    Neg(Box<Exp<'a>>),
-    UnivGenr(&'a str, Box<Exp<'a>>),
-    ExistGenr(&'a str, Box<Exp<'a>>),
-    Falsum,
-}
 
 pub fn exp(s: &str) -> IResult<&str, Exp> {
     cond_exp(s)
@@ -43,7 +31,7 @@ fn _implicit_ind_sym(s: &str) -> IResult<&str, Vec<&str>> {
 fn atom_exp(s: &str) -> IResult<&str, Exp> {
     map(
         pair(pre, alt((_explicit_ind_sym, _implicit_ind_sym))),
-        |(p, i)| Exp::Atom(p, i),
+        |(p, i)| Exp::Atom(p.to_owned(), i.iter().map(|&e| e.to_owned()).collect()),
     )(s)
 }
 
@@ -101,7 +89,7 @@ fn univ_genr_exp(s: &str) -> IResult<&str, Exp> {
             delimited(tag("("), ws(var), tag(")")),
             preceded(multispace0, f),
         ),
-        |(v, e)| Exp::UnivGenr(v, Box::new(e)),
+        |(v, e)| Exp::UnivGenr(v.to_owned(), Box::new(e)),
     )(s)
 }
 
@@ -115,7 +103,7 @@ fn exist_genr_exp(s: &str) -> IResult<&str, Exp> {
             ),
             preceded(multispace0, f),
         ),
-        |(v, e)| Exp::ExistGenr(v, Box::new(e)),
+        |(v, e)| Exp::ExistGenr(v.to_owned(), Box::new(e)),
     )(s)
 }
 
@@ -142,21 +130,27 @@ mod tests {
     fn exp_valid() {
         let exp1 = Exp::Iff(
             Box::new(Exp::ExistGenr(
-                "y",
+                "y".to_owned(),
                 Box::new(Exp::And(
-                    Box::new(Exp::Atom("F", vec!["y"])),
-                    Box::new(Exp::Atom("G", vec!["y", "y"])),
+                    Box::new(Exp::Atom("F".to_owned(), vec!["y".to_owned()])),
+                    Box::new(Exp::Atom(
+                        "G".to_owned(),
+                        vec!["y".to_owned(), "y".to_owned()],
+                    )),
                 )),
             )),
             Box::new(Exp::ExistGenr(
-                "y",
+                "y".to_owned(),
                 Box::new(Exp::And(
-                    Box::new(Exp::Atom("F", vec!["y"])),
+                    Box::new(Exp::Atom("F".to_owned(), vec!["y".to_owned()])),
                     Box::new(Exp::ExistGenr(
-                        "x",
+                        "x".to_owned(),
                         Box::new(Exp::And(
-                            Box::new(Exp::Atom("F", vec!["x"])),
-                            Box::new(Exp::Atom("G", vec!["y", "x"])),
+                            Box::new(Exp::Atom("F".to_owned(), vec!["x".to_owned()])),
+                            Box::new(Exp::Atom(
+                                "G".to_owned(),
+                                vec!["y".to_owned(), "x".to_owned()],
+                            )),
                         )),
                     )),
                 )),
@@ -174,22 +168,43 @@ mod tests {
 
     #[test]
     fn atom_exp_valid() {
-        assert_eq!(atom_exp("P"), IResult::Ok(("", Exp::Atom("P", vec![]))));
+        assert_eq!(
+            atom_exp("P"),
+            IResult::Ok(("", Exp::Atom("P".to_owned(), vec![])))
+        );
         assert_eq!(
             atom_exp("P_10"),
-            IResult::Ok(("", Exp::Atom("P_10", vec![])))
+            IResult::Ok(("", Exp::Atom("P_10".to_owned(), vec![])))
         );
         assert_eq!(
             atom_exp("R_2^3xya"),
-            IResult::Ok(("", Exp::Atom("R_2", vec!["x", "y", "a"])))
+            IResult::Ok((
+                "",
+                Exp::Atom(
+                    "R_2".to_owned(),
+                    vec!["x".to_owned(), "y".to_owned(), "a".to_owned()]
+                )
+            ))
         );
         assert_eq!(
             atom_exp("R_2xy_2a"),
-            IResult::Ok(("", Exp::Atom("R_2", vec!["x", "y_2", "a"])))
+            IResult::Ok((
+                "",
+                Exp::Atom(
+                    "R_2".to_owned(),
+                    vec!["x".to_owned(), "y_2".to_owned(), "a".to_owned()]
+                )
+            ))
         );
         assert_eq!(
             atom_exp("R_2 x y a"),
-            IResult::Ok(("", Exp::Atom("R_2", vec!["x", "y", "a"])))
+            IResult::Ok((
+                "",
+                Exp::Atom(
+                    "R_2".to_owned(),
+                    vec!["x".to_owned(), "y".to_owned(), "a".to_owned()]
+                )
+            ))
         );
     }
 
@@ -197,23 +212,26 @@ mod tests {
     fn atom_exp_invalid() {
         assert_eq!(
             atom_exp("P^2AB"),
-            IResult::Ok(("^2AB", Exp::Atom("P", vec![])))
+            IResult::Ok(("^2AB", Exp::Atom("P".to_owned(), vec![])))
         );
         assert_eq!(
             atom_exp("P^2x"),
-            IResult::Ok(("^2x", Exp::Atom("P", vec![])))
+            IResult::Ok(("^2x", Exp::Atom("P".to_owned(), vec![])))
         );
         assert_eq!(
             atom_exp("P^2xyz"),
-            IResult::Ok(("z", Exp::Atom("P", vec!["x", "y"])))
+            IResult::Ok((
+                "z",
+                Exp::Atom("P".to_owned(), vec!["x".to_owned(), "y".to_owned()])
+            ))
         );
         assert_eq!(
             atom_exp("P ^2"),
-            IResult::Ok((" ^2", Exp::Atom("P", vec![])))
+            IResult::Ok((" ^2", Exp::Atom("P".to_owned(), vec![])))
         );
         assert_eq!(
             atom_exp("R^1_2x"),
-            IResult::Ok(("^1_2x", Exp::Atom("R", vec![])))
+            IResult::Ok(("^1_2x", Exp::Atom("R".to_owned(), vec![])))
         );
     }
 }

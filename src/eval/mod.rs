@@ -1,6 +1,4 @@
-use crate::parse::exp;
-use crate::parse::expression::Exp;
-
+use crate::parse::{exp, Exp};
 
 // fn eval(e: Exp) {
 //     match e {
