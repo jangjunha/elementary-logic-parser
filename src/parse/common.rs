@@ -25,3 +25,7 @@ pub fn negation(s: &str) -> IResult<&str, &str> {
 pub fn existential(s: &str) -> IResult<&str, &str> {
     tag("∃")(s)
 }
+
+pub fn falsum(s: &str) -> IResult<&str, &str> {
+    tag("⊥")(s)
+}

@@ -6,7 +6,9 @@ use nom::combinator::{map, map_res, value};
 use nom::sequence::{pair, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
 
-use super::common::{and, existential, left_right_arrow, negation, or, right_arrow};
+use super::common::{
+    and, existential, falsum as falsum_tag, left_right_arrow, negation, or, right_arrow,
+};
 use super::util::ws;
 
 #[derive(Debug, Clone)]
@@ -20,6 +22,7 @@ pub enum DerivationRule {
     IfExclude(i32, i32),
     IffIntro(i32, i32),
     IffExclude(i32),
+    Falsum(i32),
     NegIntro((i32, i32)),
     NegExclude((i32, i32)),
     UnivQuntIntro(i32),
@@ -113,6 +116,12 @@ pub fn iff_exclude(s: &str) -> IResult<&str, DerivationRule> {
         terminated(num, preceded(multispace1, pair(left_right_arrow, tag("E")))),
         |k| DerivationRule::IffExclude(k),
     )(s)
+}
+
+pub fn falsum(s: &str) -> IResult<&str, DerivationRule> {
+    map(terminated(num, preceded(multispace1, falsum_tag)), |k| {
+        DerivationRule::Falsum(k)
+    })(s)
 }
 
 pub fn neg_intro(s: &str) -> IResult<&str, DerivationRule> {

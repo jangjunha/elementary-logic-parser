@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::rule::DerivationRule;
 use crate::parse::{exp as parse_exp, Exp};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct DerivationItem {
     pub id: i32,
     pub sentence_text: String,

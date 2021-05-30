@@ -22,27 +22,6 @@ impl Derivation {
         self.items.iter().position(|r| r.id == id).unwrap()
     }
 
-    pub fn get_premises_for_item<'a>(&self, item: &'a DerivationItem) -> Vec<&'a DerivationItem> {
-        match item.rule {
-            Some(DerivationRule::Premise) => vec![item],
-            Some(DerivationRule::AndIntro(k, l)) => vec![],
-            Some(DerivationRule::AndExclude(k)) => vec![],
-            Some(DerivationRule::OrIntro(k, l)) => vec![],
-            Some(DerivationRule::OrExclude(k, (l1, m1), (l2, m2))) => vec![],
-            Some(DerivationRule::IfIntro((k, l))) => vec![],
-            Some(DerivationRule::IfExclude(k, l)) => vec![],
-            Some(DerivationRule::IffIntro(k, l)) => vec![],
-            Some(DerivationRule::IffExclude(k)) => vec![],
-            Some(DerivationRule::NegIntro((k, l))) => vec![],
-            Some(DerivationRule::NegExclude((k, l))) => vec![],
-            Some(DerivationRule::UnivQuntIntro(k)) => vec![],
-            Some(DerivationRule::UnivQuntExclude(k)) => vec![],
-            Some(DerivationRule::ExisQuntIntro(k)) => vec![],
-            Some(DerivationRule::ExisQuntExclude(k, (l, m))) => vec![],
-            None => vec![],
-        }
-    }
-
     pub fn is_rule_valid(&self, item: &DerivationItem) -> bool {
         if let Some(rule) = &item.rule {
             let sentence_for_id = |k: &i32| self.item_for_id(*k).map(|i| i.sentence());
@@ -89,18 +68,20 @@ impl Derivation {
                 }
                 DerivationRule::OrIntro(_, _) => false,
                 DerivationRule::OrExclude(Some(k), (Some(l1), Some(m1)), (Some(l2), Some(m2))) => {
+                    let item_l1 = self.item_for_id(*l1);
+                    let item_l2 = self.item_for_id(*l2);
                     match (
                         sentence_for_id(k),
-                        sentence_for_id(l1),
+                        item_l1.map(|i| (i.sentence(), &i.rule)),
                         sentence_for_id(m1),
-                        sentence_for_id(l2),
+                        item_l2.map(|i| (i.sentence(), &i.rule)),
                         sentence_for_id(m2),
                     ) {
                         (
                             Some(Ok(Exp::Or(exp_k_lhs, exp_k_rhs))),
-                            Some(Ok(exp_l1)),
+                            Some((Ok(exp_l1), Some(DerivationRule::Premise))),
                             Some(Ok(exp_m1)),
-                            Some(Ok(exp_l2)),
+                            Some((Ok(exp_l2), Some(DerivationRule::Premise))),
                             Some(Ok(exp_m2)),
                         ) => match item.sentence() {
                             Ok(exp) => {
@@ -115,11 +96,14 @@ impl Derivation {
                 }
                 DerivationRule::OrExclude(_, _, _) => false,
                 DerivationRule::IfIntro((Some(k), Some(l))) => {
-                    match (sentence_for_id(k), sentence_for_id(l)) {
-                        (Some(Ok(exp_k)), Some(Ok(exp_l))) => match item.sentence() {
-                            Ok(Exp::Cond(lhs, rhs)) => (exp_k == *lhs) && (exp_l == *rhs),
-                            Ok(_) | Err(_) => false,
-                        },
+                    let item_k = self.item_for_id(*k);
+                    match (item_k.map(|i| (i.sentence(), &i.rule)), sentence_for_id(l)) {
+                        (Some((Ok(exp_k), Some(DerivationRule::Premise))), Some(Ok(exp_l))) => {
+                            match item.sentence() {
+                                Ok(Exp::Cond(lhs, rhs)) => (exp_k == *lhs) && (exp_l == *rhs),
+                                Ok(_) | Err(_) => false,
+                            }
+                        }
                         _ => false,
                     }
                 }
@@ -163,6 +147,13 @@ impl Derivation {
                     _ => false,
                 },
                 DerivationRule::IffExclude(_) => false,
+                DerivationRule::Falsum(Some(k)) => {
+                    match sentence_for_id(k) {
+                        Some(Ok(Exp::Falsum)) => true,
+                        _ => false,
+                    }
+                },
+                DerivationRule::Falsum(_) => false,
                 DerivationRule::NegIntro((Some(k), Some(l))) => {
                     match (sentence_for_id(k), sentence_for_id(l)) {
                         (Some(Ok(exp_k)), Some(Ok(Exp::Falsum))) => match item.sentence() {

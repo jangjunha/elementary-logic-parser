@@ -1,4 +1,5 @@
 use std::cmp::max;
+use std::collections::{HashMap, HashSet};
 use yew::prelude::*;
 
 use super::super::model::rule::to_string as rule_to_string;
@@ -136,6 +137,128 @@ impl Component for DerivationTable {
     }
 
     fn view(&self) -> Html {
+        let mut deps: HashMap<i32, HashSet<&DerivationItem>> = HashMap::new();
+        let children = self
+            .state
+            .derivation
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, e)| {
+                let mut dep = HashSet::<&DerivationItem>::new();
+                match &e.rule {
+                    Some(rule) => match rule {
+                        DerivationRule::Premise => {
+                            &dep.insert(e);
+                        }
+                        DerivationRule::AndIntro(k, l) => {
+                            if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                            if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                        }
+                        DerivationRule::AndExclude(k) => {
+                            if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                        }
+                        DerivationRule::OrIntro(k, l) => {
+                            if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                            if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                        }
+                        DerivationRule::OrExclude(k, (l1, m1), (l2, m2)) => {
+                            if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                            if let Some(Some(i)) = m1.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                            if let Some(Some(i)) = m2.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                            if let Some(Some(i)) = l1.map(|e| self.state.derivation.item_for_id(e)) {
+                                dep.remove(i);
+                            }
+                            if let Some(Some(i)) = l2.map(|e| self.state.derivation.item_for_id(e)) {
+                                dep.remove(i);
+                            }
+                        }
+                        DerivationRule::IfIntro((k, l)) => {
+                            if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                            if let Some(Some(i)) = k.map(|e| self.state.derivation.item_for_id(e)) {
+                                dep.remove(i);
+                            }
+                        }
+                        DerivationRule::IfExclude(k, l) => {
+                            if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                            if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                        }
+                        DerivationRule::Falsum(k) => {
+                            if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                        }
+                        DerivationRule::NegIntro((k, l)) | DerivationRule::NegExclude((k, l)) => {
+                            if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                            if let Some(Some(i)) = k.map(|e| self.state.derivation.item_for_id(e)) {
+                                dep.remove(i);
+                            }
+                        }
+                        DerivationRule::IffIntro(k, l) => {
+                            if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                            if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                        }
+                        DerivationRule::IffExclude(k) => {
+                            if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                        }
+                        DerivationRule::UnivQuntIntro(k) | DerivationRule::UnivQuntExclude(k) => {
+                            if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                        }
+                        DerivationRule::ExisQuntIntro(k) => {
+                            if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                        }
+                        DerivationRule::ExisQuntExclude(k, (l, m)) => {
+                            if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                            if let Some(Some(i)) = m.map(|e| deps.get(&e)) {
+                                dep.extend(i);
+                            }
+                            if let Some(Some(i)) = l.map(|e| self.state.derivation.item_for_id(e)) {
+                                dep.remove(i);
+                            }
+                        }
+                    },
+                    None => (),
+                };
+                deps.insert(e.id, dep);
+                self.view_item(e, i, &deps)
+            });
+
         html! {
             <div>
                 <table>
@@ -146,7 +269,7 @@ impl Component for DerivationTable {
                         <th>{"도출규칙"}</th>
                         <th>{""}</th>
                     </tr>
-                    { for self.state.derivation.items.iter().enumerate().map(|(i, e)| self.view_item(e, i)) }
+                    { for children }
                 </table>
                 <p>{"Press Enter key to insert row below current row."}</p>
                 { self.state.mode.view(self) }
@@ -156,7 +279,7 @@ impl Component for DerivationTable {
 }
 
 impl DerivationTable {
-    fn view_item(&self, item: &DerivationItem, index: usize) -> Html {
+    fn view_item(&self, item: &DerivationItem, index: usize, deps: &HashMap<i32, HashSet<&DerivationItem>>) -> Html {
         let item_id = item.id;
         let sentence_valid_class = if item.is_valid_sentence() {
             "valid"
@@ -188,11 +311,13 @@ impl DerivationTable {
             _ => None,
         });
 
-        let deps = self.state.derivation.get_premises_for_item(item);
-        let premise_nums: Vec<String> = deps
+        let mut premise_nums: Vec<String> = deps
+            .get(&item_id)
+            .unwrap_or(&HashSet::new())
             .iter()
             .map(|&e| (self.state.derivation.index_for_item(e.id) + 1).to_string())
             .collect();
+        premise_nums.sort();
 
         let rule_id_to_num = |i: &Option<i32>| {
             if let Some(i) = i {

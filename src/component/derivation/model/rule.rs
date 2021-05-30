@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::parse::derivation_rule::{self, derivation_rule as parse_derivation_rule};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum DerivationRule {
     Premise,
     AndIntro(Option<i32>, Option<i32>),
@@ -21,6 +21,7 @@ pub enum DerivationRule {
     IfExclude(Option<i32>, Option<i32>),
     IffIntro(Option<i32>, Option<i32>),
     IffExclude(Option<i32>),
+    Falsum(Option<i32>),
     NegIntro((Option<i32>, Option<i32>)),
     NegExclude((Option<i32>, Option<i32>)),
     UnivQuntIntro(Option<i32>),
@@ -38,6 +39,7 @@ const NAME_IF_INTRO: &str = "if intro (→I)";
 const NAME_IF_EXCLUDE: &str = "if exclude (→E)";
 const NAME_IFF_INTRO: &str = "iff intro (↔I)";
 const NAME_IFF_EXCLUDE: &str = "iff exclude (↔E)";
+const NAME_FALSUM: &str = "falsum (⊥)";
 const NAME_NEG_INTRO: &str = "neg intro (-I)";
 const NAME_NEG_EXCLUDE: &str = "neg exclude (-E)";
 const NAME_UNIV_QUNT_INTRO: &str = "univ qunt intro (()I)";
@@ -57,6 +59,7 @@ impl DerivationRule {
             NAME_IF_EXCLUDE,
             NAME_IFF_INTRO,
             NAME_IFF_EXCLUDE,
+            NAME_FALSUM,
             NAME_NEG_INTRO,
             NAME_NEG_EXCLUDE,
             NAME_UNIV_QUNT_INTRO,
@@ -77,6 +80,7 @@ impl DerivationRule {
             Self::IfExclude(_, _) => NAME_IF_EXCLUDE,
             Self::IffIntro(_, _) => NAME_IFF_INTRO,
             Self::IffExclude(_) => NAME_IFF_EXCLUDE,
+            Self::Falsum(_) => NAME_FALSUM,
             Self::NegIntro(_) => NAME_NEG_INTRO,
             Self::NegExclude(_) => NAME_NEG_EXCLUDE,
             Self::UnivQuntIntro(_) => NAME_UNIV_QUNT_INTRO,
@@ -97,6 +101,7 @@ impl DerivationRule {
             NAME_IF_EXCLUDE => Ok(Self::IfExclude(None, None)),
             NAME_IFF_INTRO => Ok(Self::IffIntro(None, None)),
             NAME_IFF_EXCLUDE => Ok(Self::IffExclude(None)),
+            NAME_FALSUM => Ok(Self::Falsum(None)),
             NAME_NEG_INTRO => Ok(Self::NegIntro((None, None))),
             NAME_NEG_EXCLUDE => Ok(Self::NegExclude((None, None))),
             NAME_UNIV_QUNT_INTRO => Ok(Self::UnivQuntIntro(None)),
@@ -146,7 +151,7 @@ impl DerivationRule {
             Self::IffIntro(k, None) => Self::IffIntro(*k, next),
             Self::IffIntro(Some(_), Some(_)) => Self::IffIntro(next, None),
             Self::IffExclude(_) => Self::IffExclude(next),
-
+            Self::Falsum(_) => Self::Falsum(next),
             Self::NegIntro((None, l)) => Self::NegIntro((next, *l)),
             Self::NegIntro((k, None)) => Self::NegIntro((*k, next)),
             Self::NegIntro((Some(_), Some(_))) => Self::NegIntro((next, None)),
@@ -253,6 +258,7 @@ where
             format!("{}, {} ↔I", fmt(k), fmt(l))
         }
         DerivationRule::IffExclude(k) => format!("{} ↔E", fmt(k)),
+        DerivationRule::Falsum(k) => format!("{} ⊥", fmt(k)),
         DerivationRule::NegIntro((k, l)) => {
             format!("{}-{} -I", fmt(k), fmt(l))
         }
@@ -295,6 +301,7 @@ pub fn from_string(value: &str) -> Result<DerivationRule, Error> {
             derivation_rule::DerivationRule::NegIntro((k, l)) => {
                 DerivationRule::NegIntro((Some(k), Some(l)))
             }
+            derivation_rule::DerivationRule::Falsum(k) => DerivationRule::Falsum(Some(k)),
             derivation_rule::DerivationRule::NegExclude((k, l)) => {
                 DerivationRule::NegExclude((Some(k), Some(l)))
             }

@@ -1,4 +1,4 @@
-use super::common::{and, existential, left_right_arrow, negation, or, right_arrow};
+use super::common::{and, existential, falsum, left_right_arrow, negation, or, right_arrow};
 use super::individual_constant::{dim, ind_sym, pre, var};
 use super::util::ws;
 use super::Exp;
@@ -111,12 +111,12 @@ fn genr_exp(s: &str) -> IResult<&str, Exp> {
     alt((exist_genr_exp, univ_genr_exp))(s)
 }
 
-fn falsum(s: &str) -> IResult<&str, Exp> {
-    value(Exp::Falsum, tag("⊥"))(s)
+fn falsum_exp(s: &str) -> IResult<&str, Exp> {
+    value(Exp::Falsum, falsum)(s)
 }
 
 fn f(s: &str) -> IResult<&str, Exp> {
-    alt((atom_exp, falsum, genr_exp, parenthesesed_exp))(s)
+    alt((atom_exp, falsum_exp, genr_exp, parenthesesed_exp))(s)
 }
 
 #[cfg(test)]
