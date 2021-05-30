@@ -5,20 +5,17 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
-use yew::format::Yaml;
 use yew::prelude::*;
-use yew::services::storage::{Area, StorageService};
 
 use super::super::model::rule::to_string as rule_to_string;
 use super::super::model::{Derivation, DerivationItem, DerivationRule};
 use crate::parse::exp as parse_exp;
 use crate::parse::model::to_string as exp_to_string;
-
-const KEY_DERIVATIONS: &str = "derivations";
+use crate::service::derivation_store::DerivationStoreService;
 
 pub struct DerivationTable {
     link: ComponentLink<Self>,
-    storage: StorageService,
+    store: DerivationStoreService,
     state: State,
 }
 
@@ -119,7 +116,7 @@ impl Component for DerivationTable {
     fn create(_props: Self::Properties, link: ComponentLink<Self>) -> Self {
         Self {
             link,
-            storage: StorageService::new(Area::Local).expect("storage was disabled by the user"),
+            store: DerivationStoreService::new(),
             state: State {
                 derivation: Derivation {
                     name: "Untitled".to_owned(),
@@ -194,13 +191,8 @@ impl Component for DerivationTable {
                 _ => false,
             },
             Msg::BeginApplyDerivation { item_id } => {
-                let Yaml(exists) = self.storage.restore(KEY_DERIVATIONS);
-                let mut exists: Vec<Derivation> = exists.ok().unwrap_or_else(Vec::new);
-
-                let name = &self.state.load_selection;
-                match exists.iter().position(|d| d.name == *name) {
-                    Some(index) => {
-                        let derivation = exists.remove(index);
+                match self.store.load_by_name(&self.state.load_selection) {
+                    Some(derivation) => {
                         let mut mapping = BTreeMap::<String, Option<String>>::new();
                         match derivation.items.first().map(|i| i.sentence()) {
                             Some(Ok(first_exp)) => {
@@ -349,21 +341,13 @@ impl Component for DerivationTable {
                 true
             }
             Msg::Save => {
-                let Yaml(exists) = self.storage.restore(KEY_DERIVATIONS);
-                let exists: Vec<Derivation> = exists.ok().unwrap_or_else(Vec::new);
                 let name = &self.state.derivation.name;
-                let mut derivations: Vec<&Derivation> =
-                    exists.iter().filter(|d| d.name != *name).collect();
-                let postfix = if exists.len() != derivations.len() {
+                let postfix = if let Some(_) = self.store.load_by_name(name) {
                     "overwrited"
                 } else {
                     "saved"
                 };
-
-                derivations.push(&self.state.derivation);
-
-                self.storage.store(KEY_DERIVATIONS, Yaml(&derivations));
-
+                self.store.insert(&self.state.derivation);
                 self.state.save_status = Some(Ok(format!("'{}' {}", name, postfix)));
                 true
             }
@@ -372,13 +356,9 @@ impl Component for DerivationTable {
                 false
             }
             Msg::Load => {
-                let Yaml(exists) = self.storage.restore(KEY_DERIVATIONS);
-                let mut exists: Vec<Derivation> = exists.ok().unwrap_or_else(Vec::new);
-
                 let name = &self.state.load_selection;
-                match exists.iter().position(|d| d.name == *name) {
-                    Some(index) => {
-                        let derivation = exists.remove(index);
+                match self.store.load_by_name(name) {
+                    Some(derivation) => {
                         self.state.derivation = derivation;
                         self.state.mode = Mode::Normal;
                         true
@@ -387,13 +367,7 @@ impl Component for DerivationTable {
                 }
             }
             Msg::RemoveSaved => {
-                let Yaml(exists) = self.storage.restore(KEY_DERIVATIONS);
-                let mut exists: Vec<Derivation> = exists.ok().unwrap_or_else(Vec::new);
-
-                let name = &self.state.load_selection;
-                exists.retain(|d| d.name != *name);
-                self.storage.store(KEY_DERIVATIONS, Yaml(&exists));
-
+                self.store.remove(&self.state.load_selection);
                 self.state.load_selection = "".to_owned();
                 true
             }
@@ -528,8 +502,7 @@ impl Component for DerivationTable {
                 deps.insert(e.id, dep);
                 self.view_item(e, i, &deps)
             });
-        let Yaml(saves) = self.storage.restore(KEY_DERIVATIONS);
-        let saves: Vec<Derivation> = saves.ok().unwrap_or_else(Vec::new);
+        let saves = self.store.load();
         let save_status = match &self.state.save_status {
             Some(Ok(msg)) => html! { format!("Saved: {}", msg) },
             Some(Err(msg)) => html! { format!("Error: {}", msg) },
