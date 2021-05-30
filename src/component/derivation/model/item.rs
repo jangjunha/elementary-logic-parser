@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use super::rule::DerivationRule;
 use crate::parse::{exp as parse_exp, Exp};
 
-#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+// TODO: Serialize 시 sentence_text 그대로 넣지 말고 ``create::parse::model::to_string(sentence())`` 쓰기
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct DerivationItem {
     pub id: i32,
     pub sentence_text: String,

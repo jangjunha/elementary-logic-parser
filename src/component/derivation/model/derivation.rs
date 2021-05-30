@@ -4,8 +4,9 @@ use super::item::DerivationItem;
 use super::rule::DerivationRule;
 use crate::parse::Exp;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Derivation {
+    pub name: String,
     pub items: Vec<DerivationItem>,
 }
 
@@ -43,7 +44,7 @@ impl Derivation {
                 DerivationRule::AndExclude(Some(k)) => match sentence_for_id(k) {
                     Some(Ok(Exp::And(exp_k_lhs, exp_k_rhs))) => match item.sentence() {
                         Ok(exp) => (exp == *exp_k_lhs) || (exp == *exp_k_rhs),
-                        Ok(_) | Err(_) => false,
+                        Err(_) => false,
                     },
                     _ => false,
                 },
@@ -109,13 +110,16 @@ impl Derivation {
                 }
                 DerivationRule::IfIntro(_) => false,
                 DerivationRule::IfExclude(Some(k), Some(l)) => {
-                    match (sentence_for_id(k), sentence_for_id(l)) {
-                        (Some(Ok(Exp::Cond(exp_k_lhs, exp_k_rhs))), Some(Ok(exp_l))) => {
-                            match item.sentence() {
-                                Ok(exp) => (*exp_k_lhs == exp_l) && (*exp_k_rhs == exp),
-                                Err(_) => false,
-                            }
+                    match (sentence_for_id(k), sentence_for_id(l), item.sentence()) {
+                        (Some(Ok(exp_k)), Some(Ok(exp_l)), Ok(Exp::Falsum))
+                            if (exp_k.negated() == exp_l) || (exp_k == exp_l.negated()) =>
+                        {
+                            true
                         }
+                        (Some(Ok(Exp::Cond(exp_k_lhs, exp_k_rhs))), Some(Ok(exp_l)), Ok(exp)) => {
+                            (*exp_k_lhs == exp_l) && (*exp_k_rhs == exp)
+                        }
+                        (_, _, Err(_)) => false,
                         _ => false,
                     }
                 }
@@ -147,11 +151,9 @@ impl Derivation {
                     _ => false,
                 },
                 DerivationRule::IffExclude(_) => false,
-                DerivationRule::Falsum(Some(k)) => {
-                    match sentence_for_id(k) {
-                        Some(Ok(Exp::Falsum)) => true,
-                        _ => false,
-                    }
+                DerivationRule::Falsum(Some(k)) => match sentence_for_id(k) {
+                    Some(Ok(Exp::Falsum)) => true,
+                    _ => false,
                 },
                 DerivationRule::Falsum(_) => false,
                 DerivationRule::NegIntro((Some(k), Some(l))) => {
@@ -178,7 +180,7 @@ impl Derivation {
                 DerivationRule::NegExclude(_) => false,
                 DerivationRule::UnivQuntIntro(Some(k)) => match sentence_for_id(k) {
                     Some(Ok(exp_k)) => match item.sentence() {
-                        Ok(Exp::UnivGenr(var, inner)) => inner.replaced(&var, "<UNKNOWN>") == exp_k,
+                        Ok(Exp::UnivGenr(var, inner)) => inner.var_replaced(&var, "<UNKNOWN>") == exp_k,
                         Ok(_) | Err(_) => false,
                     },
                     _ => false,
@@ -186,7 +188,7 @@ impl Derivation {
                 DerivationRule::UnivQuntIntro(_) => false,
                 DerivationRule::UnivQuntExclude(Some(k)) => match sentence_for_id(k) {
                     Some(Ok(Exp::UnivGenr(exp_k_var, exp_k_inner))) => match item.sentence() {
-                        Ok(exp) => exp_k_inner.replaced(&exp_k_var, "<UNKNOWN>") == exp,
+                        Ok(exp) => exp_k_inner.var_replaced(&exp_k_var, "<UNKNOWN>") == exp,
                         Err(_) => false,
                     },
                     _ => false,
@@ -195,7 +197,7 @@ impl Derivation {
                 DerivationRule::ExisQuntIntro(Some(k)) => match sentence_for_id(k) {
                     Some(Ok(exp_k)) => match item.sentence() {
                         Ok(Exp::ExistGenr(var, inner)) => {
-                            inner.replaced(&var, "<UNKNOWN>") == exp_k
+                            inner.var_replaced(&var, "<UNKNOWN>") == exp_k
                         }
                         Ok(_) | Err(_) => false,
                     },
@@ -210,7 +212,7 @@ impl Derivation {
                             Some(Ok(exp_m)),
                         ) => match item.sentence() {
                             Ok(exp) => {
-                                (exp_k_inner.replaced(&exp_k_var, "<UNKNOWN>") == exp_l)
+                                (exp_k_inner.var_replaced(&exp_k_var, "<UNKNOWN>") == exp_l)
                                     && (exp_m == exp)
                             }
                             Err(_) => false,

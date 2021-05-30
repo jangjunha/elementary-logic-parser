@@ -519,6 +519,7 @@ dependencies = [
  "ryu",
  "serde",
  "serde_json",
+ "serde_yaml",
  "slab",
  "thiserror",
  "wasm-bindgen",

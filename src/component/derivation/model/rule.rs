@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt;
 
 use serde::de::{self, Visitor};
@@ -112,61 +113,92 @@ impl DerivationRule {
         }
     }
 
-    pub fn filled_next(&self, next_id: i32) -> Self {
+    // Filling deps and return it with is_completed.
+    pub fn filling_next(&self, next_id: i32) -> (Self, bool) {
         let next = Some(next_id);
         match self {
-            Self::Premise => Self::Premise,
-            Self::AndIntro(None, l) => Self::AndIntro(next, *l),
-            Self::AndIntro(k, None) => Self::AndIntro(*k, next),
-            Self::AndIntro(Some(_), Some(_)) => Self::AndIntro(next, None),
-            Self::AndExclude(_) => Self::AndExclude(next),
-            Self::OrIntro(None, l) => Self::OrIntro(next, *l),
-            Self::OrIntro(k, None) => Self::OrIntro(*k, next),
-            Self::OrIntro(_, _) => Self::OrIntro(next, None),
+            Self::Premise => (Self::Premise, true),
+            Self::AndIntro(None, l) => (Self::AndIntro(next, *l), false),
+            Self::AndIntro(k, None) => (Self::AndIntro(*k, next), true),
+            Self::AndIntro(Some(_), Some(_)) => (Self::AndIntro(next, None), false),
+            Self::AndExclude(_) => (Self::AndExclude(next), true),
+            Self::OrIntro(None, l) => (Self::OrIntro(next, *l), false),
+            Self::OrIntro(k, None) => (Self::OrIntro(*k, next), true),
+            Self::OrIntro(_, _) => (Self::OrIntro(next, None), false),
             Self::OrExclude(None, (l1, m1), (l2, m2)) => {
-                Self::OrExclude(next, (*l1, *m1), (*l2, *m2))
+                (Self::OrExclude(next, (*l1, *m1), (*l2, *m2)), false)
             }
             Self::OrExclude(k, (None, m1), (l2, m2)) => {
-                Self::OrExclude(*k, (next, *m1), (*l2, *m2))
+                (Self::OrExclude(*k, (next, *m1), (*l2, *m2)), false)
             }
             Self::OrExclude(k, (l1, None), (l2, m2)) => {
-                Self::OrExclude(*k, (*l1, next), (*l2, *m2))
+                (Self::OrExclude(*k, (*l1, next), (*l2, *m2)), false)
             }
             Self::OrExclude(k, (l1, m1), (None, m2)) => {
-                Self::OrExclude(*k, (*l1, *m1), (next, *m2))
+                (Self::OrExclude(*k, (*l1, *m1), (next, *m2)), false)
             }
             Self::OrExclude(k, (l1, m1), (l2, None)) => {
-                Self::OrExclude(*k, (*l1, *m1), (*l2, next))
+                (Self::OrExclude(*k, (*l1, *m1), (*l2, next)), true)
             }
             Self::OrExclude(Some(_), (Some(_), Some(_)), (Some(_), Some(_))) => {
-                Self::OrExclude(next, (None, None), (None, None))
+                (Self::OrExclude(next, (None, None), (None, None)), false)
             }
-            Self::IfIntro((None, l)) => Self::IfIntro((next, *l)),
-            Self::IfIntro((k, None)) => Self::IfIntro((*k, next)),
-            Self::IfIntro((Some(_), Some(_))) => Self::IfIntro((next, None)),
-            Self::IfExclude(None, l) => Self::IfExclude(next, *l),
-            Self::IfExclude(k, None) => Self::IfExclude(*k, next),
-            Self::IfExclude(Some(_), Some(_)) => Self::IfExclude(next, None),
-            Self::IffIntro(None, l) => Self::IffIntro(next, *l),
-            Self::IffIntro(k, None) => Self::IffIntro(*k, next),
-            Self::IffIntro(Some(_), Some(_)) => Self::IffIntro(next, None),
-            Self::IffExclude(_) => Self::IffExclude(next),
-            Self::Falsum(_) => Self::Falsum(next),
-            Self::NegIntro((None, l)) => Self::NegIntro((next, *l)),
-            Self::NegIntro((k, None)) => Self::NegIntro((*k, next)),
-            Self::NegIntro((Some(_), Some(_))) => Self::NegIntro((next, None)),
-            Self::NegExclude((None, l)) => Self::NegExclude((next, *l)),
-            Self::NegExclude((k, None)) => Self::NegExclude((*k, next)),
-            Self::NegExclude((Some(_), Some(_))) => Self::NegExclude((next, None)),
-            Self::UnivQuntIntro(_) => Self::UnivQuntIntro(next),
-            Self::UnivQuntExclude(_) => Self::UnivQuntExclude(next),
-            Self::ExisQuntIntro(_) => Self::ExisQuntIntro(next),
-            Self::ExisQuntExclude(None, (l, m)) => Self::ExisQuntExclude(next, (*l, *m)),
-            Self::ExisQuntExclude(k, (None, m)) => Self::ExisQuntExclude(*k, (next, *m)),
-            Self::ExisQuntExclude(k, (l, None)) => Self::ExisQuntExclude(*k, (*l, next)),
+            Self::IfIntro((None, l)) => (Self::IfIntro((next, *l)), false),
+            Self::IfIntro((k, None)) => (Self::IfIntro((*k, next)), true),
+            Self::IfIntro((Some(_), Some(_))) => (Self::IfIntro((next, None)), false),
+            Self::IfExclude(None, l) => (Self::IfExclude(next, *l), false),
+            Self::IfExclude(k, None) => (Self::IfExclude(*k, next), true),
+            Self::IfExclude(Some(_), Some(_)) => (Self::IfExclude(next, None), false),
+            Self::IffIntro(None, l) => (Self::IffIntro(next, *l), false),
+            Self::IffIntro(k, None) => (Self::IffIntro(*k, next), true),
+            Self::IffIntro(Some(_), Some(_)) => (Self::IffIntro(next, None), false),
+            Self::IffExclude(_) => (Self::IffExclude(next), true),
+            Self::Falsum(_) => (Self::Falsum(next), true),
+            Self::NegIntro((None, l)) => (Self::NegIntro((next, *l)), false),
+            Self::NegIntro((k, None)) => (Self::NegIntro((*k, next)), true),
+            Self::NegIntro((Some(_), Some(_))) => (Self::NegIntro((next, None)), false),
+            Self::NegExclude((None, l)) => (Self::NegExclude((next, *l)), false),
+            Self::NegExclude((k, None)) => (Self::NegExclude((*k, next)), true),
+            Self::NegExclude((Some(_), Some(_))) => (Self::NegExclude((next, None)), false),
+            Self::UnivQuntIntro(_) => (Self::UnivQuntIntro(next), true),
+            Self::UnivQuntExclude(_) => (Self::UnivQuntExclude(next), true),
+            Self::ExisQuntIntro(_) => (Self::ExisQuntIntro(next), true),
+            Self::ExisQuntExclude(None, (l, m)) => (Self::ExisQuntExclude(next, (*l, *m)), false),
+            Self::ExisQuntExclude(k, (None, m)) => (Self::ExisQuntExclude(*k, (next, *m)), false),
+            Self::ExisQuntExclude(k, (l, None)) => (Self::ExisQuntExclude(*k, (*l, next)), true),
             Self::ExisQuntExclude(Some(_), (Some(_), Some(_))) => {
-                Self::ExisQuntExclude(next, (None, None))
+                (Self::ExisQuntExclude(next, (None, None)), false)
             }
+        }
+    }
+
+    pub fn id_replaced(&self, mapping: &BTreeMap<i32, i32>) -> Self {
+        let r = |i: &Option<i32>| -> Option<i32> {
+            if let Some(i) = i {
+                Some(*mapping.get(i).unwrap_or(i))
+            } else {
+                *i
+            }
+        };
+        match self {
+            Self::Premise => Self::Premise,
+            Self::AndIntro(k, l) => Self::AndIntro(r(k), r(l)),
+            Self::AndExclude(k) => Self::AndExclude(r(k)),
+            Self::OrIntro(k, l) => Self::OrIntro(r(k), r(l)),
+            Self::OrExclude(k, (l1, m1), (l2, m2)) => {
+                Self::OrExclude(r(k), (r(l1), r(m1)), (r(l2), r(m2)))
+            }
+            Self::IfIntro((k, l)) => Self::IfIntro((r(k), r(l))),
+            Self::IfExclude(k, l) => Self::IfExclude(r(k), r(l)),
+            Self::IffIntro(k, l) => Self::IffIntro(r(k), r(l)),
+            Self::IffExclude(k) => Self::IffExclude(r(k)),
+            Self::Falsum(k) => Self::Falsum(r(k)),
+            Self::NegIntro((k, l)) => Self::NegIntro((r(k), r(l))),
+            Self::NegExclude((k, l)) => Self::NegExclude((r(k), r(l))),
+            Self::UnivQuntIntro(k) => Self::UnivQuntIntro(r(k)),
+            Self::UnivQuntExclude(k) => Self::UnivQuntExclude(r(k)),
+            Self::ExisQuntIntro(k) => Self::ExisQuntIntro(r(k)),
+            Self::ExisQuntExclude(k, (l, m)) => Self::ExisQuntExclude(r(k), (r(l), r(m))),
         }
     }
 }
