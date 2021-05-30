@@ -1,3 +1,4 @@
+use super::common::{and, existential, left_right_arrow, negation, or, right_arrow};
 use super::individual_constant::{dim, ind_sym, pre, var};
 use super::util::ws;
 use nom::branch::alt;
@@ -46,14 +47,6 @@ fn atom_exp(s: &str) -> IResult<&str, Exp> {
     )(s)
 }
 
-fn right_arrow(s: &str) -> IResult<&str, &str> {
-    alt((tag("→"), tag("->")))(s)
-}
-
-fn left_right_arrow(s: &str) -> IResult<&str, &str> {
-    alt((tag("↔"), tag("<->")))(s)
-}
-
 fn if_exp(s: &str) -> IResult<&str, Exp> {
     map(
         tuple((bool_exp, ws(right_arrow), cond_exp)),
@@ -72,18 +65,10 @@ fn cond_exp(s: &str) -> IResult<&str, Exp> {
     alt((if_exp, iff_exp, bool_exp))(s)
 }
 
-fn and(s: &str) -> IResult<&str, &str> {
-    tag("&")(s)
-}
-
 fn and_exp(s: &str) -> IResult<&str, Exp> {
     map(tuple((neg_exp, ws(and), bool_exp)), |(lhs, _, rhs)| {
         Exp::And(Box::new(lhs), Box::new(rhs))
     })(s)
-}
-
-fn or(s: &str) -> IResult<&str, &str> {
-    tag("∨")(s)
 }
 
 fn or_exp(s: &str) -> IResult<&str, Exp> {
@@ -94,10 +79,6 @@ fn or_exp(s: &str) -> IResult<&str, Exp> {
 
 fn bool_exp(s: &str) -> IResult<&str, Exp> {
     alt((and_exp, or_exp, neg_exp))(s)
-}
-
-fn negation(s: &str) -> IResult<&str, &str> {
-    tag("-")(s)
 }
 
 fn negate_exp(s: &str) -> IResult<&str, Exp> {
@@ -112,10 +93,6 @@ fn neg_exp(s: &str) -> IResult<&str, Exp> {
 
 fn parenthesesed_exp(s: &str) -> IResult<&str, Exp> {
     delimited(tag("("), ws(exp), tag(")"))(s)
-}
-
-fn existential(s: &str) -> IResult<&str, &str> {
-    tag("∃")(s)
 }
 
 fn univ_genr_exp(s: &str) -> IResult<&str, Exp> {
