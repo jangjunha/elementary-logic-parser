@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use super::item::DerivationItem;
 use super::rule::DerivationRule;

@@ -2,8 +2,7 @@ use crate::parse::Exp;
 use boolinator::Boolinator;
 use serde_yaml;
 use std::cmp::max;
-use std::collections::BTreeMap;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::iter::FromIterator;
 use yew::prelude::*;
 
