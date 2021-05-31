@@ -230,6 +230,13 @@ impl Derivation {
                         _ => false,
                     }
                 }
+                DerivationRule::IfIntro((None, Some(l))) => match sentence_for_id(l) {
+                    Some(Ok(exp_l)) => match item.sentence() {
+                        Ok(Exp::Cond(_, rhs)) => exp_l == *rhs,
+                        Ok(_) | Err(_) => false,
+                    },
+                    _ => false,
+                },
                 DerivationRule::IfIntro(_) => false,
                 DerivationRule::IfExclude(Some(k), Some(l)) => {
                     match (sentence_for_id(k), sentence_for_id(l), item.sentence()) {
@@ -363,7 +370,11 @@ impl Derivation {
                 DerivationRule::ExisQuntIntro(_) => false,
                 DerivationRule::ExisQuntExclude(Some(k), (Some(l), Some(m))) => {
                     let item_l = self.item_for_id(*l);
-                    match (sentence_for_id(k), item_l.map(|i| (i.sentence(), &i.rule)), sentence_for_id(m)) {
+                    match (
+                        sentence_for_id(k),
+                        item_l.map(|i| (i.sentence(), &i.rule)),
+                        sentence_for_id(m),
+                    ) {
                         (
                             Some(Ok(Exp::ExistGenr(exp_k_var, exp_k_inner))),
                             Some((Ok(exp_l), Some(DerivationRule::Premise))),

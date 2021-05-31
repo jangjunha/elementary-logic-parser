@@ -11,14 +11,14 @@ use super::common::{
 };
 use super::util::ws;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DerivationRule {
     Premise,
     AndIntro(i32, i32),
     AndExclude(i32),
     OrIntro(i32, Option<i32>),
     OrExclude(i32, (i32, i32), (i32, i32)),
-    IfIntro((i32, i32)),
+    IfIntro((Option<i32>, i32)),
     IfExclude(i32, i32),
     IffIntro(i32, i32),
     IffExclude(i32),
@@ -86,7 +86,10 @@ pub fn or_exclude(s: &str) -> IResult<&str, DerivationRule> {
 
 pub fn if_intro(s: &str) -> IResult<&str, DerivationRule> {
     map(
-        terminated(range, preceded(multispace1, pair(right_arrow, tag("I")))),
+        terminated(
+            pair(opt(terminated(num, ws(tag("-")))), num),
+            preceded(multispace1, pair(right_arrow, tag("I"))),
+        ),
         |(k, l)| DerivationRule::IfIntro((k, l)),
     )(s)
 }
@@ -188,4 +191,26 @@ pub fn derivation_rule(s: &str) -> IResult<&str, DerivationRule> {
         exis_qunt_intro,
         exis_qunt_exclude,
     ))(s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nom::IResult;
+
+    #[test]
+    fn derivation_rule_valid() {
+        assert_eq!(
+            derivation_rule("3 →I"),
+            IResult::Ok(("", DerivationRule::IfIntro((None, 3))))
+        );
+        assert_eq!(
+            derivation_rule("2-3 →I"),
+            IResult::Ok(("", DerivationRule::IfIntro((Some(2), 3))))
+        );
+        assert_eq!(
+            derivation_rule("7-14 →I"),
+            IResult::Ok(("", DerivationRule::IfIntro((Some(7), 14))))
+        );
+    }
 }

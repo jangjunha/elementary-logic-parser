@@ -143,9 +143,9 @@ impl DerivationRule {
             Self::OrExclude(Some(_), (Some(_), Some(_)), (Some(_), Some(_))) => {
                 (Self::OrExclude(next, (None, None), (None, None)), false)
             }
-            Self::IfIntro((None, l)) => (Self::IfIntro((next, *l)), false),
-            Self::IfIntro((k, None)) => (Self::IfIntro((*k, next)), true),
-            Self::IfIntro((Some(_), Some(_))) => (Self::IfIntro((next, None)), false),
+            Self::IfIntro((k, None)) => (Self::IfIntro((*k, next)), false),
+            Self::IfIntro((None, l)) => (Self::IfIntro((next, *l)), true),
+            Self::IfIntro((Some(_), Some(_))) => (Self::IfIntro((None, next)), false),
             Self::IfExclude(None, l) => (Self::IfExclude(next, *l), false),
             Self::IfExclude(k, None) => (Self::IfExclude(*k, next), true),
             Self::IfExclude(Some(_), Some(_)) => (Self::IfExclude(next, None), false),
@@ -205,7 +205,11 @@ impl DerivationRule {
 
 impl ToString for DerivationRule {
     fn to_string(&self) -> String {
-        to_string(self, |i| i.map_or_else(|| "".to_owned(), |e| e.to_string()))
+        to_string(
+            self,
+            |i| i.map_or_else(|| "".to_owned(), |e| e.to_string()),
+            false,
+        )
     }
 }
 
@@ -214,9 +218,11 @@ impl Serialize for DerivationRule {
     where
         S: ser::Serializer,
     {
-        serializer.serialize_str(&to_string(self, |i| {
-            i.map_or_else(|| "".to_owned(), |e| e.to_string())
-        }))
+        serializer.serialize_str(&to_string(
+            self,
+            |i| i.map_or_else(|| "".to_owned(), |e| e.to_string()),
+            false,
+        ))
     }
 }
 
@@ -257,7 +263,7 @@ pub enum Error {
     ParseError,
 }
 
-pub fn to_string<F>(value: &DerivationRule, format_id: F) -> String
+pub fn to_string<F>(value: &DerivationRule, format_id: F, always_show_blank: bool) -> String
 where
     F: Fn(&Option<i32>) -> String,
 {
@@ -280,6 +286,9 @@ where
             fmt(l2),
             fmt(m2)
         ),
+        DerivationRule::IfIntro((None, l)) if !always_show_blank => {
+            format!("{} →I", fmt(l))
+        }
         DerivationRule::IfIntro((k, l)) => {
             format!("{}-{} →I", fmt(k), fmt(l))
         }
@@ -321,7 +330,7 @@ pub fn from_string(value: &str) -> Result<DerivationRule, Error> {
                 DerivationRule::OrExclude(Some(k), (Some(l1), Some(m1)), (Some(l2), Some(m2)))
             }
             derivation_rule::DerivationRule::IfIntro((k, l)) => {
-                DerivationRule::IfIntro((Some(k), Some(l)))
+                DerivationRule::IfIntro((k, Some(l)))
             }
             derivation_rule::DerivationRule::IfExclude(k, l) => {
                 DerivationRule::IfExclude(Some(k), Some(l))

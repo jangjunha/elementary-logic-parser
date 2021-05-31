@@ -535,7 +535,7 @@ impl DerivationTable {
                     }}}
                 </td>
                 <td class=classes!(rule_valid_class)>{ match &item.rule {
-                    Some(rule) => rule_to_string(rule, rule_id_to_num),
+                    Some(rule) => rule_to_string(rule, rule_id_to_num, false),
                     None => "".to_string(),
                 } }</td>
                 { if let Mode::Readonly = self.state.mode { html! {}} else { html!{
@@ -660,7 +660,7 @@ impl Mode {
             let rule_view = match &item.rule {
                 None => html! {},
                 Some(rule) => html! {
-                    rule_to_string(rule, rule_id_to_num)
+                    rule_to_string(rule, rule_id_to_num, true)
                 },
             };
 

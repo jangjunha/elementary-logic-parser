@@ -2,6 +2,7 @@ use crate::component::derivation::model::Derivation;
 use crate::parse::Exp;
 use yew::format::Yaml;
 use yew::services::storage::{Area, StorageService};
+use yew::services::ConsoleService;
 
 const KEY_DERIVATIONS: &str = "derivations";
 
@@ -18,6 +19,9 @@ impl DerivationStoreService {
 
     pub fn load(&self) -> Vec<Derivation> {
         let Yaml(exists) = self.storage.restore(KEY_DERIVATIONS);
+        if let Err(err) = &exists {
+            ConsoleService::error(&format!("Error occured while loading. {:?}", err));
+        }
         exists.ok().unwrap_or_else(Vec::<Derivation>::new)
     }
 
