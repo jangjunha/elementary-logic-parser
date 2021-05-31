@@ -361,16 +361,9 @@ impl Component for DerivationTable {
             None => html! {},
         };
 
-        let handle_change_name = self.link.batch_callback(|event: ChangeData| match event {
-            ChangeData::Value(val) => Some(Msg::UpdateName(val)),
-            _ => None,
-        });
-
-        let handle_change_serialized_text =
-            self.link.batch_callback(|event: ChangeData| match event {
-                ChangeData::Value(val) => Some(Msg::UpdateSerializedText(val)),
-                _ => None,
-            });
+        let handle_change_serialized_text = self
+            .link
+            .callback(|event: InputData| Msg::UpdateSerializedText(event.value));
 
         let handle_change_load_selection =
             self.link.batch_callback(|event: ChangeData| match event {
@@ -383,7 +376,7 @@ impl Component for DerivationTable {
                 <div class="derivation-table--section-main">
                     <div>
                         {"Name: "}
-                        <input onchange=handle_change_name value=self.state.derivation.name.clone() />
+                        <input oninput=self.link.callback(|e: InputData| Msg::UpdateName(e.value)) value=self.state.derivation.name.clone() />
                         <button onclick=self.link.callback(|_| Msg::ToggleReadonly)>{"toggle readonly"}</button>
                     </div>
                     <table class="derivation--table--table">
@@ -405,7 +398,7 @@ impl Component for DerivationTable {
                         <h3>{"Import/Export"}</h3>
                         <button onclick=self.link.callback(|_| Msg::Export)>{ "export" }</button>
                         <br />
-                        <textarea rows={"30"} cols={"80"} onchange=handle_change_serialized_text>{ self.state.serialized_text.clone() }</textarea>
+                        <textarea rows={"30"} cols={"80"} oninput=handle_change_serialized_text>{ self.state.serialized_text.clone() }</textarea>
                         <br />
                         <button onclick=self.link.callback(|_| Msg::Import)>{ "import" }</button>
                     </div>
