@@ -276,7 +276,7 @@ where
         DerivationRule::AndExclude(k) => format!("{} &E", fmt(k)),
         DerivationRule::OrIntro(k, l) => match l {
             None => format!("{} ∨I", fmt(k)),
-            Some(l) => format!("{}, {} ∨I", fmt(k), l),
+            Some(l) => format!("{}, {} ∨I", fmt(k), fmt(&Some(*l))),
         },
         DerivationRule::OrExclude(k, (l1, m1), (l2, m2)) => format!(
             "{}, {}-{}, {}-{} ∨E",
