@@ -193,8 +193,10 @@ impl Component for DerivationTable {
                         .item_for_id(focused_id)
                         .map(|i| i.sentence())
                     {
-                        if let Some(derivation) = self.store.load_by_name(&name) {
-                            let index = self.state.derivation.index_for_item(focused_id);
+                        if let (Some(derivation), Some(index)) = (
+                            self.store.load_by_name(&name),
+                            self.state.derivation.index_for_item(focused_id),
+                        ) {
                             let map_items = |items: &[DerivationItem],
                                              mapping: &BTreeMap<String, String>,
                                              match_map: (i32, i32)|
@@ -492,13 +494,25 @@ impl DerivationTable {
             .deps_for_item(item_id)
             .unwrap_or_else(|| HashSet::new())
             .iter()
-            .map(|&e| (self.state.derivation.index_for_item(e.id) + 1).to_string())
+            .map(|&e| {
+                (self
+                    .state
+                    .derivation
+                    .index_for_item(e.id)
+                    .map_or(0, |n| n + 1))
+                .to_string()
+            })
             .collect();
         premise_nums.sort();
 
         let rule_id_to_num = |i: &Option<i32>| {
             if let Some(i) = i {
-                (self.state.derivation.index_for_item(*i) + 1).to_string()
+                (self
+                    .state
+                    .derivation
+                    .index_for_item(*i)
+                    .map_or(0, |n| n + 1))
+                .to_string()
             } else {
                 "_".to_owned()
             }
@@ -634,7 +648,12 @@ impl Mode {
                     });
             let rule_id_to_num = |i: &Option<i32>| {
                 if let Some(i) = i {
-                    (component.state.derivation.index_for_item(*i) + 1).to_string()
+                    (component
+                        .state
+                        .derivation
+                        .index_for_item(*i)
+                        .map_or(0, |n| n + 1))
+                    .to_string()
                 } else {
                     "_".to_owned()
                 }
@@ -648,7 +667,7 @@ impl Mode {
 
             html! {
                 <>
-                    { format!("Mode: Editing derivation rule for {}", component.state.derivation.index_for_item(item_id) + 1) }
+                    { format!("Mode: Editing derivation rule for {}", component.state.derivation.index_for_item(item_id).map_or(0, |n| n + 1)) }
                     <button onclick=component.link.callback(|_| Msg::ExitRuleSelection)>{ "exit" }</button>
                     <div>
                         <select onchange=handle_change>

@@ -22,9 +22,8 @@ impl Derivation {
         self.items.iter_mut().find(|e| e.id == id)
     }
 
-    pub fn index_for_item(&self, id: i32) -> usize {
-        // FIXME: unwrap() 말고 Option 반환할 필요가 있음
-        self.items.iter().position(|r| r.id == id).unwrap()
+    pub fn index_for_item(&self, id: i32) -> Option<usize> {
+        self.items.iter().position(|r| r.id == id)
     }
 
     pub fn deps_for_item(&self, id: i32) -> Option<HashSet<&DerivationItem>> {
