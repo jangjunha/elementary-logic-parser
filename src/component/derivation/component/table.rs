@@ -197,11 +197,11 @@ impl Component for DerivationTable {
                             let map_items = |items: &[DerivationItem],
                                              mapping: &BTreeMap<String, String>,
                                              match_map: (i32, i32)|
-                             -> Vec<DerivationItem> {
+                             -> (Vec<DerivationItem>, BTreeMap::<i32, i32>) {
                                 let mut next_id = self.state.next_id() - 1;
                                 let mut id_map =
                                     BTreeMap::<i32, i32>::from_iter([match_map].iter().cloned());
-                                items
+                                let res: Vec<DerivationItem> = items
                                     .iter()
                                     .map(|item| {
                                         next_id += 1;
@@ -235,7 +235,8 @@ impl Component for DerivationTable {
                                             },
                                         }
                                     })
-                                    .collect()
+                                    .collect();
+                                (res, id_map)
                             };
                             let matches = |item: &DerivationItem| {
                                 if let Ok(e) = item.sentence() {
@@ -246,7 +247,7 @@ impl Component for DerivationTable {
                             };
                             if let Some(first) = derivation.items.first() {
                                 if let Some(mapping) = matches(first) {
-                                    let items = map_items(
+                                    let (items, _) = map_items(
                                         &derivation.items[1..derivation.items.len()],
                                         &mapping,
                                         (first.id, focused_id),
@@ -257,12 +258,16 @@ impl Component for DerivationTable {
                             };
                             if let Some(last) = derivation.items.last() {
                                 if let Some(mapping) = matches(last) {
-                                    let items = map_items(
+                                    let (items, id_map) = map_items(
                                         &derivation.items[0..derivation.items.len() - 1],
                                         &mapping,
                                         (last.id, focused_id),
                                     );
                                     self.state.extend_items(index - 1, items);
+                                    self.state.update_item_rule(
+                                        focused_id,
+                                        &last.rule.as_ref().map(|r| r.id_replaced(&id_map)),
+                                    );
                                     return true;
                                 }
                             }
