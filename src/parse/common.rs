@@ -15,7 +15,7 @@ pub fn and(s: &str) -> IResult<&str, &str> {
 }
 
 pub fn or(s: &str) -> IResult<&str, &str> {
-    tag("∨")(s)
+    alt((tag("∨"), tag("|")))(s)
 }
 
 pub fn negation(s: &str) -> IResult<&str, &str> {
@@ -23,9 +23,9 @@ pub fn negation(s: &str) -> IResult<&str, &str> {
 }
 
 pub fn existential(s: &str) -> IResult<&str, &str> {
-    tag("∃")(s)
+    alt((tag("∃"), tag("]")))(s)
 }
 
 pub fn falsum(s: &str) -> IResult<&str, &str> {
-    tag("⊥")(s)
+    alt((tag("⊥"), tag("\\bot")))(s)
 }
