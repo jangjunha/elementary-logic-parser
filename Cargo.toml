@@ -15,3 +15,4 @@ yew = { version = "0.18.0", features = ["yaml"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
 boolinator = "2.4.0"
+console_error_panic_hook = "0.1.6"

@@ -108,6 +108,7 @@ name = "elementary-logic-parser"
 version = "0.1.0"
 dependencies = [
  "boolinator",
+ "console_error_panic_hook",
  "nom",
  "serde",
  "serde_yaml",
