@@ -1,15 +1,13 @@
 use crate::parse::Exp;
+use boolinator::Boolinator;
 use serde_yaml;
 use std::cmp::max;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::{HashMap, HashSet};
-use std::iter::FromIterator;
 use yew::prelude::*;
 
 use super::super::model::rule::to_string as rule_to_string;
 use super::super::model::{Derivation, DerivationItem, DerivationRule};
-use crate::parse::exp as parse_exp;
 use crate::parse::model::to_string as exp_to_string;
 use crate::service::derivation_store::DerivationStoreService;
 
@@ -22,14 +20,7 @@ pub struct DerivationTable {
 #[derive(Debug, Clone)]
 enum Mode {
     Normal,
-    RuleSelection {
-        item_id: i32,
-    },
-    ApplyDerivation {
-        item_id: i32,
-        derivation: Derivation,
-        mapping: BTreeMap<String, Option<String>>,
-    },
+    RuleSelection { item_id: i32 },
 }
 
 pub struct State {
@@ -38,6 +29,7 @@ pub struct State {
     serialized_text: String,
     save_status: Option<Result<String, String>>,
     load_selection: String,
+    focused: Option<i32>,
 }
 
 impl State {
@@ -90,10 +82,7 @@ pub enum Msg {
     RemoveItem { id: i32 },
     BeginRuleSelection { for_item_id: i32 },
     ExitRuleSelection,
-    BeginApplyDerivation { item_id: i32 },
-    UpdateApplyingDerivationMapping(String, String),
-    DoneApplyDerivation,
-    ExitApplyDerivation,
+    ApplyDerivation(String),
     UpdateSerializedText(String),
     Import,
     Export,
@@ -101,6 +90,7 @@ pub enum Msg {
     UpdateLoadSelection(String),
     Load,
     RemoveSaved,
+    Focus(i32),
 }
 
 pub enum ItemMsg {
@@ -130,6 +120,7 @@ impl Component for DerivationTable {
                 serialized_text: "".to_owned(),
                 save_status: None,
                 load_selection: "".to_owned(),
+                focused: None,
             },
         }
     }
@@ -190,139 +181,92 @@ impl Component for DerivationTable {
                 }
                 _ => false,
             },
-            Msg::BeginApplyDerivation { item_id } => {
-                match self.store.load_by_name(&self.state.load_selection) {
-                    Some(derivation) => {
-                        let mut mapping = BTreeMap::<String, Option<String>>::new();
-                        match derivation.items.first().map(|i| i.sentence()) {
-                            Some(Ok(first_exp)) => {
-                                fn _atom_exps(
-                                    exp: &Exp,
-                                    bound_vars: BTreeSet<String>,
-                                ) -> BTreeSet<String> {
-                                    match exp {
-                                        Exp::Atom(_, inds) => {
-                                            let inds =
-                                                BTreeSet::<String>::from_iter(inds.iter().cloned());
-                                            if inds.intersection(&bound_vars).count() > 0 {
-                                                // TODO: 처리 방향 고민 필요
-                                                BTreeSet::new()
+            Msg::ApplyDerivation(name) => {
+                if let Some(focused_id) = self.state.focused {
+                    if let Some(Ok(exp)) = self
+                        .state
+                        .derivation
+                        .item_for_id(focused_id)
+                        .map(|i| i.sentence())
+                    {
+                        if let Some(derivation) = self.store.load_by_name(&name) {
+                            let index = self.state.derivation.index_for_item(focused_id);
+                            let map_items = |items: &[DerivationItem],
+                                             mapping: &BTreeMap<String, String>|
+                             -> Vec<DerivationItem> {
+                                let mut next_id = self.state.next_id() - 1;
+                                let mut id_map = BTreeMap::<i32, i32>::new();
+                                items
+                                    .iter()
+                                    .map(|item| {
+                                        next_id += 1;
+                                        id_map.insert(item.id, next_id);
+                                        let rule: Option<DerivationRule> =
+                                            if let Some(rule) = &item.rule {
+                                                Some(rule.id_replaced(&id_map))
                                             } else {
-                                                BTreeSet::from_iter(
-                                                    [exp_to_string(exp)].iter().cloned(),
-                                                )
+                                                None
+                                            };
+
+                                        match item.sentence() {
+                                            Ok(sentence) => {
+                                                let replaced =
+                                                    mapping.iter().fold(sentence, |acc, (k, v)| {
+                                                        acc.replaced(
+                                                            &Exp::Atom(k.clone(), vec![]),
+                                                            &Exp::Atom(v.clone(), vec![]),
+                                                        )
+                                                    });
+                                                DerivationItem {
+                                                    id: next_id,
+                                                    sentence_text: exp_to_string(&replaced),
+                                                    rule,
+                                                }
                                             }
+                                            Err(_) => DerivationItem {
+                                                id: next_id,
+                                                sentence_text: "<ERROR>".to_owned(),
+                                                rule,
+                                            },
                                         }
-                                        Exp::Cond(lhs, rhs)
-                                        | Exp::Iff(lhs, rhs)
-                                        | Exp::And(lhs, rhs)
-                                        | Exp::Or(lhs, rhs) => _atom_exps(lhs, bound_vars.clone())
-                                            .union(&_atom_exps(rhs, bound_vars))
-                                            .cloned()
-                                            .collect(),
-                                        Exp::Neg(lhs) => _atom_exps(lhs, bound_vars),
-                                        Exp::UnivGenr(var, inner) | Exp::ExistGenr(var, inner) => {
-                                            let mut vars = inner.free_variables();
-                                            vars.remove(var);
-                                            vars
-                                        }
-                                        Exp::Falsum => BTreeSet::new(),
+                                    })
+                                    .collect()
+                            };
+                            let matches = |item: Option<&DerivationItem>| {
+                                if let Some(item) = item {
+                                    if let Ok(e) = item.sentence() {
+                                        return e.form_eq(&exp);
                                     }
                                 }
-                                let atom_exps = |exp| _atom_exps(exp, BTreeSet::new());
-                                for exp in atom_exps(&first_exp) {
-                                    mapping.insert(exp, None);
-                                }
-                                self.state.mode = Mode::ApplyDerivation {
-                                    item_id,
-                                    derivation,
-                                    mapping,
-                                };
-                                true
-                            }
-                            _ => false,
-                        }
-                    }
-                    None => false,
-                }
-            }
-            Msg::UpdateApplyingDerivationMapping(k, v) => match &mut self.state.mode {
-                Mode::ApplyDerivation {
-                    item_id: _,
-                    derivation: _,
-                    mapping,
-                } => {
-                    let v = if v.is_empty() { None } else { Some(v) };
-                    mapping.insert(k, v);
-                    true
-                }
-                _ => false,
-            },
-            Msg::DoneApplyDerivation => match &self.state.mode {
-                Mode::ApplyDerivation {
-                    item_id,
-                    derivation,
-                    mapping,
-                } => {
-                    let index = self.state.derivation.index_for_item(*item_id);
-                    let mut next_id = self.state.next_id() - 1;
-                    let mut id_map = BTreeMap::<i32, i32>::new();
-                    let items = derivation
-                        .items
-                        .iter()
-                        .map(|item| {
-                            next_id += 1;
-                            id_map.insert(item.id, next_id);
-                            let rule: Option<DerivationRule> = if let Some(rule) = &item.rule {
-                                Some(rule.id_replaced(&id_map))
-                            } else {
                                 None
                             };
-
-                            match item.sentence() {
-                                Ok(sentence) => {
-                                    let replaced = mapping.iter().fold(sentence, |acc, (k, v)| {
-                                        match (parse_exp(k), v.as_ref().map(|v| parse_exp(&v))) {
-                                            (Ok((r1, k)), Some(Ok((r2, v))))
-                                                if r1.is_empty() && r2.is_empty() =>
-                                            {
-                                                acc.replaced(&k, &v)
-                                            }
-                                            _ => acc,
-                                        }
-                                    });
-                                    DerivationItem {
-                                        id: next_id,
-                                        sentence_text: exp_to_string(&replaced),
-                                        rule,
-                                    }
-                                }
-                                Err(_) => DerivationItem {
-                                    id: next_id,
-                                    sentence_text: "<ERROR>".to_owned(),
-                                    rule,
-                                },
+                            if let Some(mapping) = matches(derivation.items.first()) {
+                                let items = map_items(
+                                    &derivation.items[1..derivation.items.len()],
+                                    &mapping,
+                                );
+                                self.state.extend_items(index, items);
+                                true
+                            } else if let Some(mapping) = matches(derivation.items.last()) {
+                                let items = map_items(
+                                    &derivation.items[0..derivation.items.len() - 1],
+                                    &mapping,
+                                );
+                                self.state.extend_items(index - 1, items);
+                                true
+                            } else {
+                                false
                             }
-                        })
-                        .collect();
-
-                    self.state.extend_items(index, items);
-                    self.state.mode = Mode::Normal;
-                    true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
                 }
-                _ => false,
-            },
-            Msg::ExitApplyDerivation => match &self.state.mode {
-                Mode::ApplyDerivation {
-                    item_id: _,
-                    derivation: _,
-                    mapping: _,
-                } => {
-                    self.state.mode = Mode::Normal;
-                    true
-                }
-                _ => false,
-            },
+            }
             Msg::UpdateSerializedText(text) => {
                 self.state.serialized_text = text;
                 false
@@ -369,6 +313,10 @@ impl Component for DerivationTable {
             Msg::RemoveSaved => {
                 self.store.remove(&self.state.load_selection);
                 self.state.load_selection = "".to_owned();
+                true
+            }
+            Msg::Focus(item_id) => {
+                self.state.focused = Some(item_id);
                 true
             }
         }
@@ -527,46 +475,72 @@ impl Component for DerivationTable {
             });
 
         html! {
-            <div>
-                <div>
-                    {"Name: "}
-                    <input onchange=handle_change_name value=self.state.derivation.name.clone() />
+            <div class="derivation-table--wrapper">
+                <div class="derivation-table--section-main">
+                    <div>
+                        {"Name: "}
+                        <input onchange=handle_change_name value=self.state.derivation.name.clone() />
+                    </div>
+                    <table class="derivation--table--table">
+                        <tr>
+                            <th>{"전제번호"}</th>
+                            <th>{"번호"}</th>
+                            <th>{"문장"}</th>
+                            <th>{"도출규칙"}</th>
+                            <th>{""}</th>
+                        </tr>
+                        { for children }
+                    </table>
+                    <p>{"Press Enter key to insert row below current row."}</p>
+                    { self.state.mode.view(self) }
+                    <hr />
+                    <div>
+                        <h3>{"Import/Export"}</h3>
+                        <button onclick=self.link.callback(|_| Msg::Export)>{ "export" }</button>
+                        <br />
+                        <textarea rows={"30"} cols={"80"} onchange=handle_change_serialized_text>{ self.state.serialized_text.clone() }</textarea>
+                        <br />
+                        <button onclick=self.link.callback(|_| Msg::Import)>{ "import" }</button>
+                    </div>
+                    <hr />
+                    <div>
+                        <h3>{"Save/Load"}</h3>
+                        <button onclick=self.link.callback(|_| Msg::Save)>{ "save" }</button>
+                        { save_status }
+                        <br />
+                        <select onchange=handle_change_load_selection>
+                            <option value="">{"== select =="}</option>
+                            { for saves.iter().map(|d| html_nested! {
+                                <option value=d.name.clone()>{ d.name.clone() }</option>
+                            }) }
+                        </select>
+                        <button onclick=self.link.callback(|_| Msg::Load)>{ "load" }</button>
+                        <button onclick=self.link.callback(|_| Msg::RemoveSaved)>{ "remove" }</button>
+                    </div>
                 </div>
-                <table>
-                    <tr>
-                        <th>{"전제번호"}</th>
-                        <th>{"번호"}</th>
-                        <th>{"문장"}</th>
-                        <th>{"도출규칙"}</th>
-                        <th>{""}</th>
-                    </tr>
-                    { for children }
-                </table>
-                <p>{"Press Enter key to insert row below current row."}</p>
-                { self.state.mode.view(self) }
-                <hr />
-                <div>
-                    <h3>{"Import/Export"}</h3>
-                    <button onclick=self.link.callback(|_| Msg::Export)>{ "export" }</button>
-                    <br />
-                    <textarea rows={"30"} cols={"80"} onchange=handle_change_serialized_text>{ self.state.serialized_text.clone() }</textarea>
-                    <br />
-                    <button onclick=self.link.callback(|_| Msg::Import)>{ "import" }</button>
-                </div>
-                <hr />
-                <div>
-                    <h3>{"Save/Load"}</h3>
-                    <button onclick=self.link.callback(|_| Msg::Save)>{ "save" }</button>
-                    { save_status }
-                    <br />
-                    <select onchange=handle_change_load_selection>
-                        <option value="">{"== select =="}</option>
-                        { for saves.iter().map(|d| html_nested! {
-                            <option value=d.name.clone()>{ d.name.clone() }</option>
+                <div class="derivation-table--section-menu">
+                    { self.state.focused.map_or(html!{}, |item_id| {
+                        if let Some(Ok(exp)) = self.state.derivation.item_for_id(item_id).map(|i| i.sentence()) {
+                            html! {
+                                <div>
+                                    <h4>{"Apply available saved derivation:"}</h4>
+                                    <ul>
+                                        { for self.available_derivations_for(&item_id).into_iter().map(|(typ, derivation)| {
+                                            let name = derivation.name.clone();
+                                            let handle_click_apply_derivation = self.link.callback(move |_| Msg::ApplyDerivation(name.to_owned()));
+                                            html_nested! {
+                                                <li>
+                                                    <button onclick=handle_click_apply_derivation>{ derivation.name.clone() }</button>
+                                                    { typ.describe_opposite(&derivation, &exp) }
+                                                </li>
+                                            }
+                                        }) }
+                                    </ul>
+                                </div>
+                            }
+                        } else { html! {} }
                         }) }
-                    </select>
-                    <button onclick=self.link.callback(|_| Msg::Load)>{ "load" }</button>
-                    <button onclick=self.link.callback(|_| Msg::RemoveSaved)>{ "remove" }</button>
+                    <hr />
                 </div>
             </div>
         }
@@ -611,6 +585,8 @@ impl DerivationTable {
             _ => None,
         });
 
+        let handle_mouseover = self.link.callback(move |_| Msg::Focus(item_id));
+
         let mut premise_nums: Vec<String> = deps
             .get(&item_id)
             .unwrap_or(&HashSet::new())
@@ -629,10 +605,10 @@ impl DerivationTable {
         let fmt_id = |id: i32| (id as u8 + 96) as char;
 
         html! {
-            <tr key={item.id}>
+            <tr key={item.id} onmouseover=handle_mouseover class=classes!((self.state.focused == Some(item_id)).as_some("focused"))>
                 <td>{ format!("{{{}}}", premise_nums.join(",")) }</td>
                 <td onclick=handle_click_num>{ format!("{} ({})", index + 1, fmt_id(item.id)) }</td>
-                <td class=classes!(sentence_valid_class)>
+                <td class=classes!(sentence_valid_class, "derivation-table--td-sentence")>
                     <input
                         type="text"
                         value=item.sentence_text.clone()
@@ -649,7 +625,6 @@ impl DerivationTable {
                 <td>
                     { self.view_item_edit_button(item_id) }
                     { self.view_item_remove_button(item_id) }
-                    { self.view_item_apply_derivation_button(item_id) }
                 </td>
             </tr>
         }
@@ -685,18 +660,26 @@ impl DerivationTable {
         }
     }
 
-    fn view_item_apply_derivation_button(&self, item_id: i32) -> Html {
-        let disabled = match self.state.mode {
-            Mode::Normal => false,
-            _ => true,
-        };
-        html! {
-            <button
-                onclick=self.link.callback(move |_| Msg::BeginApplyDerivation { item_id })
-                disabled=disabled
-            >
-                {"append saved"}
-            </button>
+    fn available_derivations_for(&self, item_id: &i32) -> Vec<(ApplyDerivationType, Derivation)> {
+        if let Some(Ok(exp)) = self
+            .state
+            .derivation
+            .item_for_id(*item_id)
+            .map(|i| i.sentence())
+        {
+            self.store
+                .load_by_first_exp(&exp)
+                .into_iter()
+                .map(|d| (ApplyDerivationType::FromFirst, d))
+                .chain(
+                    self.store
+                        .load_by_last_exp(&exp)
+                        .into_iter()
+                        .map(|d| (ApplyDerivationType::ToLast, d)),
+                )
+                .collect()
+        } else {
+            vec![]
         }
     }
 }
@@ -716,64 +699,6 @@ impl Mode {
             Mode::RuleSelection { item_id } => {
                 self.view_content_rule_selection(component, *item_id)
             }
-            Mode::ApplyDerivation {
-                item_id,
-                derivation,
-                mapping,
-            } => self.view_content_apply_derivation(component, item_id, derivation, mapping),
-        }
-    }
-
-    fn view_content_apply_derivation(
-        &self,
-        component: &DerivationTable,
-        item_id: &i32,
-        derivation: &Derivation,
-        mapping: &BTreeMap<String, Option<String>>,
-    ) -> Html {
-        let target_num = component.state.derivation.index_for_item(*item_id) + 1;
-        let disabled = !mapping.values().all(|v| v.is_some());
-        match (derivation.items.first(), derivation.items.last()) {
-            (Some(first_item), Some(last_item)) => {
-                html! {
-                    <>
-                        { format!("Mode: Append derivation \"{}\" => \"{}\" after {}", first_item.sentence_text, last_item.sentence_text, target_num) }
-                        <ul>
-                            { for mapping.iter().map(|(k, v)| {
-                                self.view_content_apply_derivation_mapping_item(component, k.clone(), v.clone())
-                            }) }
-                        </ul>
-                        { "NOTE: After fill all mapping, focus out to enable apply button." }
-                        <button onclick=component.link.callback(|_| Msg::DoneApplyDerivation) disabled=disabled>{ "apply" }</button>
-                        <button onclick=component.link.callback(|_| Msg::ExitApplyDerivation)>{ "discard" }</button>
-                    </>
-                }
-            }
-            _ => html! {},
-        }
-    }
-
-    fn view_content_apply_derivation_mapping_item(
-        &self,
-        component: &DerivationTable,
-        k: String,
-        v: Option<String>,
-    ) -> Html {
-        let key = k.clone();
-        let handle_change_mapping_value =
-            component
-                .link
-                .batch_callback(move |event: ChangeData| match event {
-                    ChangeData::Value(val) => {
-                        Some(Msg::UpdateApplyingDerivationMapping(key.clone(), val))
-                    }
-                    _ => None,
-                });
-        html! {
-            <li>
-                { format!("{} => ", k.clone()) }
-                <input value=v.unwrap_or("".to_owned()) onchange=handle_change_mapping_value />
-            </li>
         }
     }
 
@@ -831,6 +756,65 @@ impl Mode {
             }
         } else {
             html! {{ "Unexpected error: Cannot find item for editing" }}
+        }
+    }
+}
+
+enum ApplyDerivationType {
+    FromFirst,
+    ToLast,
+}
+
+impl ApplyDerivationType {
+    pub fn matchsite(&self, derivation: &Derivation) -> Option<Exp> {
+        let item = match self {
+            Self::FromFirst => derivation.items.first(),
+            Self::ToLast => derivation.items.last(),
+        };
+        if let Some(Ok(exp)) = item.map(|i| i.sentence()) {
+            Some(exp)
+        } else {
+            None
+        }
+    }
+
+    pub fn opposite(&self, derivation: &Derivation) -> Option<Exp> {
+        let item = match self {
+            Self::FromFirst => derivation.items.last(),
+            Self::ToLast => derivation.items.first(),
+        };
+        if let Some(Ok(exp)) = item.map(|i| i.sentence()) {
+            Some(exp)
+        } else {
+            None
+        }
+    }
+
+    pub fn to_opposite(&self, derivation: &Derivation, exp: &Exp) -> Option<Exp> {
+        if let (Some(matchsite), Some(opposite)) =
+            (self.matchsite(derivation), self.opposite(derivation))
+        {
+            if let Some(mapping) = matchsite.form_eq(exp) {
+                Some(mapping.into_iter().fold(opposite, |acc, (k, v)| {
+                    acc.replaced(&Exp::Atom(k, vec![]), &Exp::Atom(v, vec![]))
+                }))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn describe_opposite(&self, derivation: &Derivation, exp: &Exp) -> String {
+        if let Some(opposite) = self.to_opposite(derivation, exp) {
+            let opposite = exp_to_string(&opposite);
+            match self {
+                Self::FromFirst => format!("=> \"{}\"", opposite),
+                Self::ToLast => format!("\"{}\" =>", opposite),
+            }
+        } else {
+            "".to_owned()
         }
     }
 }

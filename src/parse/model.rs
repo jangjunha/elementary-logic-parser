@@ -1,7 +1,9 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::iter::FromIterator;
 
 // TODO: FIXME: PartialEq
 // UnivGenr(a, Rax) == UnivGenr(b, Rbx)
+// B & A == A & B
 #[derive(PartialEq, Clone, Debug)]
 pub enum Exp {
     Atom(String, Vec<String>),
@@ -16,6 +18,64 @@ pub enum Exp {
 }
 
 impl Exp {
+    fn tuple_form_eq(s: (&Exp, &Exp), o: (&Exp, &Exp)) -> Option<BTreeMap<String, String>> {
+        let (s_lhs, s_rhs) = s;
+        let (o_lhs, o_rhs) = o;
+        match (s_lhs.form_eq(o_lhs), s_rhs.form_eq(o_rhs)) {
+            (Some(lm), Some(rm)) => {
+                let mut res = lm.clone();
+                for (k, v) in rm.into_iter() {
+                    let existing = res.insert(k, v);
+                    if let Some(_) = existing {
+                        return None;
+                    }
+                }
+                Some(res)
+            }
+            _ => None,
+        }
+    }
+
+    // determine equal with predicate replacement
+    pub fn form_eq(&self, other: &Self) -> Option<BTreeMap<String, String>> {
+        match (self, other) {
+            (Self::Atom(s_pre, s_inds), Self::Atom(o_pre, o_inds))
+                if s_inds.is_empty() && o_inds.is_empty() =>
+            {
+                Some(BTreeMap::from_iter(
+                    [(s_pre.clone(), o_pre.clone())].iter().cloned(),
+                ))
+            }
+            (Self::Atom(_, _), _) => None,
+            // not commtative
+            (Self::Cond(s_lhs, s_rhs), Self::Cond(o_lhs, o_rhs)) => {
+                Self::tuple_form_eq((s_lhs, s_rhs), (o_lhs, o_rhs))
+            }
+            (Self::Cond(_, _), _) => None,
+            // commtative
+            (Self::Iff(s_lhs, s_rhs), Self::Iff(o_lhs, o_rhs))
+            | (Self::And(s_lhs, s_rhs), Self::And(o_lhs, o_rhs))
+            | (Self::Or(s_lhs, s_rhs), Self::Or(o_lhs, o_rhs)) => {
+                Self::tuple_form_eq((s_lhs, s_rhs), (o_lhs, o_rhs))
+                    .or_else(|| Self::tuple_form_eq((s_lhs, s_rhs), (o_rhs, o_lhs)))
+            }
+            (Self::Iff(_, _), _) => None,
+            (Self::And(_, _), _) => None,
+            (Self::Or(_, _), _) => None,
+            (Self::Neg(s), Self::Neg(o)) => s.form_eq(o),
+            (Self::Neg(_), _) => None,
+            (Self::UnivGenr(s_var, s_in), Self::UnivGenr(o_var, o_in))
+            | (Self::ExistGenr(s_var, s_in), Self::ExistGenr(o_var, o_in)) => {
+                s_in.form_eq(&o_in.var_replaced(o_var, s_var))
+            }
+            (Self::UnivGenr(_, _), _) => None,
+            (Self::ExistGenr(_, _), _) => None,
+            (Self::Falsum, Self::Falsum) => Some(BTreeMap::new()),
+            (Self::Falsum, _) => None,
+        }
+    }
+
+    // FIXME: 개체상항 제외하고 variable만.
     pub fn free_variables(&self) -> BTreeSet<String> {
         match self {
             Self::Atom(_, inds) => inds.iter().cloned().collect(),

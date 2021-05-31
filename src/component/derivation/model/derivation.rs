@@ -180,7 +180,9 @@ impl Derivation {
                 DerivationRule::NegExclude(_) => false,
                 DerivationRule::UnivQuntIntro(Some(k)) => match sentence_for_id(k) {
                     Some(Ok(exp_k)) => match item.sentence() {
-                        Ok(Exp::UnivGenr(var, inner)) => inner.var_replaced(&var, "<UNKNOWN>") == exp_k,
+                        Ok(Exp::UnivGenr(var, inner)) => {
+                            inner.var_replaced(&var, "<UNKNOWN>") == exp_k
+                        }
                         Ok(_) | Err(_) => false,
                     },
                     _ => false,
