@@ -308,6 +308,17 @@ impl Derivation {
                             let src_vars = exp_k.free_variables();
                             let inn_vars = inner.free_variables();
                             if let Some(beta) = src_vars.difference(&inn_vars).next() {
+                                for item in self
+                                    .deps_for_item(*k)
+                                    .unwrap_or_else(|| HashSet::new())
+                                    .iter()
+                                {
+                                    if let Ok(e) = item.sentence() {
+                                        if e.free_variables().contains(beta) {
+                                            return false;
+                                        }
+                                    }
+                                }
                                 inner.var_replaced(&var, beta) == exp_k
                             } else {
                                 false
