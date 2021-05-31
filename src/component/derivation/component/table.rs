@@ -4,6 +4,7 @@ use serde_yaml;
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet};
+use std::iter::FromIterator;
 use yew::prelude::*;
 
 use super::super::model::rule::to_string as rule_to_string;
@@ -194,10 +195,12 @@ impl Component for DerivationTable {
                         if let Some(derivation) = self.store.load_by_name(&name) {
                             let index = self.state.derivation.index_for_item(focused_id);
                             let map_items = |items: &[DerivationItem],
-                                             mapping: &BTreeMap<String, String>|
+                                             mapping: &BTreeMap<String, String>,
+                                             match_map: (i32, i32)|
                              -> Vec<DerivationItem> {
                                 let mut next_id = self.state.next_id() - 1;
-                                let mut id_map = BTreeMap::<i32, i32>::new();
+                                let mut id_map =
+                                    BTreeMap::<i32, i32>::from_iter([match_map].iter().cloned());
                                 items
                                     .iter()
                                     .map(|item| {
@@ -234,31 +237,36 @@ impl Component for DerivationTable {
                                     })
                                     .collect()
                             };
-                            let matches = |item: Option<&DerivationItem>| {
-                                if let Some(item) = item {
-                                    if let Ok(e) = item.sentence() {
-                                        return e.form_eq(&exp);
-                                    }
+                            let matches = |item: &DerivationItem| {
+                                if let Ok(e) = item.sentence() {
+                                    e.form_eq(&exp)
+                                } else {
+                                    None
                                 }
-                                None
                             };
-                            if let Some(mapping) = matches(derivation.items.first()) {
-                                let items = map_items(
-                                    &derivation.items[1..derivation.items.len()],
-                                    &mapping,
-                                );
-                                self.state.extend_items(index, items);
-                                true
-                            } else if let Some(mapping) = matches(derivation.items.last()) {
-                                let items = map_items(
-                                    &derivation.items[0..derivation.items.len() - 1],
-                                    &mapping,
-                                );
-                                self.state.extend_items(index - 1, items);
-                                true
-                            } else {
-                                false
+                            if let Some(first) = derivation.items.first() {
+                                if let Some(mapping) = matches(first) {
+                                    let items = map_items(
+                                        &derivation.items[1..derivation.items.len()],
+                                        &mapping,
+                                        (first.id, focused_id),
+                                    );
+                                    self.state.extend_items(index, items);
+                                    return true;
+                                };
+                            };
+                            if let Some(last) = derivation.items.last() {
+                                if let Some(mapping) = matches(last) {
+                                    let items = map_items(
+                                        &derivation.items[0..derivation.items.len() - 1],
+                                        &mapping,
+                                        (last.id, focused_id),
+                                    );
+                                    self.state.extend_items(index - 1, items);
+                                    return true;
+                                }
                             }
+                            false
                         } else {
                             false
                         }
