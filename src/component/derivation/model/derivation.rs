@@ -23,6 +23,7 @@ impl Derivation {
     }
 
     pub fn index_for_item(&self, id: i32) -> usize {
+        // FIXME: unwrap() 말고 Option 반환할 필요가 있음
         self.items.iter().position(|r| r.id == id).unwrap()
     }
 

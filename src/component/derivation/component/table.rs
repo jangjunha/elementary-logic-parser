@@ -167,6 +167,9 @@ impl Component for DerivationTable {
             }
             Msg::RemoveItem { id } => {
                 self.state.remove_item(id);
+                if self.state.focused == Some(id) {
+                    self.state.focused = None
+                };
                 true
             }
             Msg::BeginRuleSelection {
