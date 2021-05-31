@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 use super::item::DerivationItem;
 use super::rule::DerivationRule;
@@ -21,6 +24,127 @@ impl Derivation {
 
     pub fn index_for_item(&self, id: i32) -> usize {
         self.items.iter().position(|r| r.id == id).unwrap()
+    }
+
+    pub fn deps_for_item(&self, id: i32) -> Option<HashSet<&DerivationItem>> {
+        let mut deps: BTreeMap<i32, HashSet<&DerivationItem>> = BTreeMap::new();
+        for e in self.items.iter() {
+            let mut dep = HashSet::<&DerivationItem>::new();
+            match &e.rule {
+                Some(rule) => match rule {
+                    DerivationRule::Premise => {
+                        &dep.insert(e);
+                    }
+                    DerivationRule::AndIntro(k, l) => {
+                        if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                        if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                    }
+                    DerivationRule::AndExclude(k) => {
+                        if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                    }
+                    DerivationRule::OrIntro(k, l) => {
+                        if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                        if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                    }
+                    DerivationRule::OrExclude(k, (l1, m1), (l2, m2)) => {
+                        if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                        if let Some(Some(i)) = m1.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                        if let Some(Some(i)) = m2.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                        if let Some(Some(i)) = l1.map(|e| self.item_for_id(e)) {
+                            dep.remove(i);
+                        }
+                        if let Some(Some(i)) = l2.map(|e| self.item_for_id(e)) {
+                            dep.remove(i);
+                        }
+                    }
+                    DerivationRule::IfIntro((k, l)) => {
+                        if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                        if let Some(Some(i)) = k.map(|e| self.item_for_id(e)) {
+                            dep.remove(i);
+                        }
+                    }
+                    DerivationRule::IfExclude(k, l) => {
+                        if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                        if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                    }
+                    DerivationRule::Falsum(k) => {
+                        if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                    }
+                    DerivationRule::NegIntro((k, l)) | DerivationRule::NegExclude((k, l)) => {
+                        if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                        if let Some(Some(i)) = k.map(|e| self.item_for_id(e)) {
+                            dep.remove(i);
+                        }
+                    }
+                    DerivationRule::IffIntro(k, l) => {
+                        if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                        if let Some(Some(i)) = l.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                    }
+                    DerivationRule::IffExclude(k) => {
+                        if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                    }
+                    DerivationRule::UnivQuntIntro(k) | DerivationRule::UnivQuntExclude(k) => {
+                        if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                    }
+                    DerivationRule::ExisQuntIntro(k) => {
+                        if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                    }
+                    DerivationRule::ExisQuntExclude(k, (l, m)) => {
+                        if let Some(Some(i)) = k.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                        if let Some(Some(i)) = m.map(|e| deps.get(&e)) {
+                            dep.extend(i);
+                        }
+                        if let Some(Some(i)) = l.map(|e| self.item_for_id(e)) {
+                            dep.remove(i);
+                        }
+                    }
+                },
+                None => (),
+            };
+            deps.insert(e.id, dep);
+            if e.id == id {
+                break;
+            }
+        }
+        deps.remove(&id)
     }
 
     pub fn is_rule_valid(&self, item: &DerivationItem) -> bool {
@@ -181,7 +305,13 @@ impl Derivation {
                 DerivationRule::UnivQuntIntro(Some(k)) => match sentence_for_id(k) {
                     Some(Ok(exp_k)) => match item.sentence() {
                         Ok(Exp::UnivGenr(var, inner)) => {
-                            inner.var_replaced(&var, "<UNKNOWN>") == exp_k
+                            let src_vars = exp_k.free_variables();
+                            let inn_vars = inner.free_variables();
+                            if let Some(beta) = src_vars.difference(&inn_vars).next() {
+                                inner.var_replaced(&var, beta) == exp_k
+                            } else {
+                                false
+                            }
                         }
                         Ok(_) | Err(_) => false,
                     },
@@ -190,7 +320,15 @@ impl Derivation {
                 DerivationRule::UnivQuntIntro(_) => false,
                 DerivationRule::UnivQuntExclude(Some(k)) => match sentence_for_id(k) {
                     Some(Ok(Exp::UnivGenr(exp_k_var, exp_k_inner))) => match item.sentence() {
-                        Ok(exp) => exp_k_inner.var_replaced(&exp_k_var, "<UNKNOWN>") == exp,
+                        Ok(exp) => {
+                            let dst_vars = exp.free_variables();
+                            let inn_vars = exp_k_inner.free_variables();
+                            if let Some(beta) = dst_vars.difference(&inn_vars).next() {
+                                exp_k_inner.var_replaced(&exp_k_var, beta) == exp
+                            } else {
+                                false
+                            }
+                        }
                         Err(_) => false,
                     },
                     _ => false,
@@ -199,7 +337,13 @@ impl Derivation {
                 DerivationRule::ExisQuntIntro(Some(k)) => match sentence_for_id(k) {
                     Some(Ok(exp_k)) => match item.sentence() {
                         Ok(Exp::ExistGenr(var, inner)) => {
-                            inner.var_replaced(&var, "<UNKNOWN>") == exp_k
+                            let src_vars = exp_k.free_variables();
+                            let inn_vars = inner.free_variables();
+                            if let Some(beta) = src_vars.difference(&inn_vars).next() {
+                                inner.var_replaced(&var, beta) == exp_k
+                            } else {
+                                false
+                            }
                         }
                         Ok(_) | Err(_) => false,
                     },
@@ -214,8 +358,35 @@ impl Derivation {
                             Some(Ok(exp_m)),
                         ) => match item.sentence() {
                             Ok(exp) => {
-                                (exp_k_inner.var_replaced(&exp_k_var, "<UNKNOWN>") == exp_l)
-                                    && (exp_m == exp)
+                                let k_inn_vars = exp_k_inner.free_variables();
+                                let l_vars = exp_l.free_variables();
+                                let m_vars = exp_m.free_variables();
+                                if let Some(beta) = l_vars
+                                    .difference(&k_inn_vars)
+                                    .cloned()
+                                    .collect::<BTreeSet<String>>()
+                                    .difference(&m_vars)
+                                    .next()
+                                {
+                                    for item in self
+                                        .deps_for_item(*m)
+                                        .unwrap_or_else(|| HashSet::new())
+                                        .iter()
+                                    {
+                                        if item.id == *l {
+                                            continue;
+                                        }
+                                        if let Ok(e) = item.sentence() {
+                                            if e.free_variables().contains(beta) {
+                                                return false;
+                                            }
+                                        }
+                                    }
+                                    (exp_k_inner.var_replaced(&exp_k_var, beta) == exp_l)
+                                        && (exp_m == exp)
+                                } else {
+                                    false
+                                }
                             }
                             Err(_) => false,
                         },

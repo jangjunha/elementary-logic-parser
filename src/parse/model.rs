@@ -75,7 +75,6 @@ impl Exp {
         }
     }
 
-    // FIXME: 개체상항 제외하고 variable만.
     pub fn free_variables(&self) -> BTreeSet<String> {
         match self {
             Self::Atom(_, inds) => inds.iter().cloned().collect(),
