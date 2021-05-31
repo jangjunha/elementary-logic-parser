@@ -10,3 +10,9 @@
 ```zsh
 $ trunk serve
 ```
+
+## Run test (parallel)
+
+```zsh
+$ cargo test -j 4
+```

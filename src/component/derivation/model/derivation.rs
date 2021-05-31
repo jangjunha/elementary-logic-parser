@@ -333,6 +333,7 @@ impl Derivation {
                 DerivationRule::UnivQuntExclude(Some(k)) => match sentence_for_id(k) {
                     Some(Ok(Exp::UnivGenr(exp_k_var, exp_k_inner))) => match item.sentence() {
                         Ok(exp) => {
+                            // FIXME: 여기선 k에 등장하는 변수를 써도 됨
                             let dst_vars = exp.free_variables();
                             let inn_vars = exp_k_inner.free_variables();
                             if let Some(beta) = dst_vars.difference(&inn_vars).next() {
@@ -351,6 +352,7 @@ impl Derivation {
                         Ok(Exp::ExistGenr(var, inner)) => {
                             let src_vars = exp_k.free_variables();
                             let inn_vars = inner.free_variables();
+                            // FIXME: 여기선 k에 등장하는 변수를 써도 됨
                             if let Some(beta) = src_vars.difference(&inn_vars).next() {
                                 inner.var_replaced(&var, beta) == exp_k
                             } else {

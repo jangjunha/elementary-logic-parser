@@ -164,6 +164,29 @@ mod tests {
             exp("( ∃ y )(Fy&Gyy) <-> (∃y)( F y & (∃x)( F x & G yx ))"),
             IResult::Ok(("", exp1.clone()))
         );
+        assert_eq!(
+            exp("--P"),
+            IResult::Ok((
+                "",
+                Exp::Neg(Box::new(Exp::Neg(Box::new(Exp::Atom(
+                    "P".to_owned(),
+                    vec![]
+                )))))
+            ))
+        );
+        assert_eq!(
+            exp("(x)-Rx"),
+            IResult::Ok((
+                "",
+                Exp::UnivGenr(
+                    "x".to_owned(),
+                    Box::new(Exp::Neg(Box::new(Exp::Atom(
+                        "R".to_owned(),
+                        vec!["x".to_owned()]
+                    ))))
+                )
+            ))
+        );
     }
 
     #[test]
