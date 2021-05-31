@@ -55,9 +55,7 @@ impl State {
 
     // Extend items next given index. Attention to item id (to be not duplicated).
     fn extend_items(&mut self, index: usize, items: Vec<DerivationItem>) {
-        self.derivation
-            .items
-            .splice((index + 1)..(index + 1), items);
+        self.derivation.items.splice(index..index, items);
     }
 
     fn remove_item(&mut self, id: i32) {
@@ -252,7 +250,7 @@ impl Component for DerivationTable {
                                         &mapping,
                                         (first.id, focused_id),
                                     );
-                                    self.state.extend_items(index, items);
+                                    self.state.extend_items(index + 1, items);
                                     return true;
                                 };
                             };
@@ -263,7 +261,7 @@ impl Component for DerivationTable {
                                         &mapping,
                                         (last.id, focused_id),
                                     );
-                                    self.state.extend_items(index - 1, items);
+                                    self.state.extend_items(index, items);
                                     self.state.update_item_rule(
                                         focused_id,
                                         &last.rule.as_ref().map(|r| r.id_replaced(&id_map)),
