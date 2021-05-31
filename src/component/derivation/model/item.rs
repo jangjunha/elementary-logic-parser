@@ -22,7 +22,7 @@ impl Serialize for DerivationItem {
         if let Ok(exp) = self.sentence() {
             state.serialize_field("sentence_text", &exp_to_string(&exp))?;
         } else {
-            state.skip_field("sentence_text")?;
+            state.serialize_field("sentence_text", &self.sentence_text)?;
         }
         state.serialize_field("rule", &self.rule)?;
         state.end()
