@@ -602,12 +602,11 @@ impl DerivationTable {
                 "_".to_owned()
             }
         };
-        let fmt_id = |id: i32| (id as u8 + 96) as char;
 
         html! {
             <tr key={item.id} onmouseover=handle_mouseover class=classes!((self.state.focused == Some(item_id)).as_some("focused"))>
                 <td>{ format!("{{{}}}", premise_nums.join(",")) }</td>
-                <td onclick=handle_click_num>{ format!("{} ({})", index + 1, fmt_id(item.id)) }</td>
+                <td onclick=handle_click_num>{ format!("{}", index + 1) }</td>
                 <td class=classes!(sentence_valid_class, "derivation-table--td-sentence")>
                     <input
                         type="text"
