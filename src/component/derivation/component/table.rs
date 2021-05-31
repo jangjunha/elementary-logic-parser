@@ -21,6 +21,7 @@ pub struct DerivationTable {
 enum Mode {
     Normal,
     RuleSelection { item_id: i32 },
+    Readonly,
 }
 
 pub struct State {
@@ -91,6 +92,7 @@ pub enum Msg {
     Load,
     RemoveSaved,
     Focus(i32),
+    ToggleReadonly,
 }
 
 pub enum ItemMsg {
@@ -319,6 +321,13 @@ impl Component for DerivationTable {
                 self.state.focused = Some(item_id);
                 true
             }
+            Msg::ToggleReadonly => {
+                self.state.mode = match self.state.mode {
+                    Mode::Readonly => Mode::Normal,
+                    _ => Mode::Readonly,
+                };
+                true
+            }
         }
     }
 
@@ -480,6 +489,7 @@ impl Component for DerivationTable {
                     <div>
                         {"Name: "}
                         <input onchange=handle_change_name value=self.state.derivation.name.clone() />
+                        <button onclick=self.link.callback(|_| Msg::ToggleReadonly)>{"toggle readonly"}</button>
                     </div>
                     <table class="derivation--table--table">
                         <tr>
@@ -487,7 +497,9 @@ impl Component for DerivationTable {
                             <th>{"번호"}</th>
                             <th>{"문장"}</th>
                             <th>{"도출규칙"}</th>
-                            <th>{""}</th>
+                            { if let Mode::Readonly = self.state.mode { html! {}} else { html!{
+                                <th>{""}</th>
+                            } }}
                         </tr>
                         { for children }
                     </table>
@@ -608,6 +620,8 @@ impl DerivationTable {
                 <td>{ format!("{{{}}}", premise_nums.join(",")) }</td>
                 <td onclick=handle_click_num>{ format!("{}", index + 1) }</td>
                 <td class=classes!(sentence_valid_class, "derivation-table--td-sentence")>
+                    { if let Mode::Readonly = self.state.mode { html! { item.sentence_text.clone()
+                    }} else { html! {
                     <input
                         type="text"
                         value=item.sentence_text.clone()
@@ -616,15 +630,18 @@ impl DerivationTable {
                         })
                         onkeypress=handle_keypress
                     />
+                    }}}
                 </td>
                 <td class=classes!(rule_valid_class)>{ match &item.rule {
                     Some(rule) => rule_to_string(rule, rule_id_to_num),
                     None => "".to_string(),
                 } }</td>
-                <td>
+                { if let Mode::Readonly = self.state.mode { html! {}} else { html!{
+                    <td>
                     { self.view_item_edit_button(item_id) }
                     { self.view_item_remove_button(item_id) }
                 </td>
+                } }}
             </tr>
         }
     }
@@ -698,6 +715,7 @@ impl Mode {
             Mode::RuleSelection { item_id } => {
                 self.view_content_rule_selection(component, *item_id)
             }
+            Mode::Readonly => html! { "Mode: Readonly" },
         }
     }
 
