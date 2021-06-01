@@ -1,13 +1,16 @@
 use crate::parse::Exp;
-use boolinator::Boolinator;
 use serde_yaml;
 use std::cmp::max;
-use std::collections::{BTreeMap, HashSet};
-use std::iter::FromIterator;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashSet;
+use std::iter::{FromIterator, IntoIterator};
+use std::rc::Rc;
 use yew::prelude::*;
 
 use super::super::model::rule::to_string as rule_to_string;
 use super::super::model::{Derivation, DerivationItem, DerivationRule};
+use super::row::Row;
 use crate::parse::model::to_string as exp_to_string;
 use crate::service::derivation_store::DerivationStoreService;
 
@@ -351,13 +354,65 @@ impl Component for DerivationTable {
     }
 
     fn view(&self) -> Html {
-        let children = self
-            .state
-            .derivation
-            .items
-            .iter()
-            .enumerate()
-            .map(|(i, e)| self.view_item(e, i));
+        let is_readonly = matches!(self.state.mode, Mode::Readonly);
+        let is_editable = matches!(self.state.mode, Mode::Normal);
+        let format_id = Rc::new(BTreeMap::from_iter(
+            self.state
+                .derivation
+                .items
+                .iter()
+                .enumerate()
+                .map(|(idx, item)| (item.id, (idx + 1).to_string())),
+        ));
+        let children = self.state
+                .derivation
+                .items
+                .iter()
+                .enumerate()
+                .map(|(i, e)| {
+                    let id = e.id;
+                    // FIXME: performance - row마다 계산하면서 앞부분 계산 계속 중복됨. 캐싱 적용 방안 같은 것 찾기
+                    let premise_ids: BTreeSet<i32> = self
+                        .state
+                        .derivation
+                        .deps_for_item(e.id)
+                        .unwrap_or_else(|| HashSet::new())
+                        .iter()
+                        .map(|e| e.id)
+                        .collect();
+                    let handle_click_num = {
+                        let mode = self.state.mode.clone();
+                        self.link.batch_callback(move |_| match mode {
+                            Mode::RuleSelection {
+                                item_id: editing_item_id,
+                            } => Some(Msg::UpdateItem(
+                                editing_item_id,
+                                ItemMsg::FillRuleDeps(id),
+                            )),
+                            _ => None,
+                        })
+                    };
+                    html! {
+                        <Row
+                            item=e.clone()
+                            premise_ids=premise_ids
+                            index=i
+                            format_id=Rc::clone(&format_id)
+                            is_rule_valid=self.state.derivation.is_rule_valid(e)
+                            is_focused=self.state.focused == Some(id)
+                            is_readonly=is_readonly
+                            is_editable=is_editable
+                            on_click_num=handle_click_num
+                            on_mouseover=self.link.callback(move |_| Msg::Focus(id))
+                            on_enter=self.link.callback(move |_| Msg::AppendNewItem { after_index: i })
+                            on_input_sentence=self.link.callback(move |event: InputData| {
+                                Msg::UpdateItem(id, ItemMsg::UpdateSentence(event.value))
+                            })
+                            on_edit=self.link.callback(move |_| Msg::BeginRuleSelection { for_item_id: id })
+                            on_remove=self.link.callback(move |_| Msg::RemoveItem { id })
+                        />
+                    }
+                });
         let saves = self.store.load();
         let save_status = match &self.state.save_status {
             Some(Ok(msg)) => html! { format!("Saved: {}", msg) },
@@ -452,132 +507,6 @@ impl Component for DerivationTable {
 }
 
 impl DerivationTable {
-    fn view_item(&self, item: &DerivationItem, index: usize) -> Html {
-        let item_id = item.id;
-        let sentence_valid_class = if item.is_valid_sentence() {
-            "valid"
-        } else {
-            "invalid"
-        };
-        let rule_valid_class = if self.state.derivation.is_rule_valid(item) {
-            "valid"
-        } else {
-            "invalid"
-        };
-
-        let handle_keypress = self.link.batch_callback(move |event: KeyboardEvent| {
-            if event.key() == "Enter" {
-                Some(Msg::AppendNewItem { after_index: index })
-            } else {
-                None
-            }
-        });
-
-        let current_mode = self.state.mode.clone();
-        let handle_click_num = self.link.batch_callback(move |_| match current_mode {
-            Mode::RuleSelection {
-                item_id: editing_item_id,
-            } => Some(Msg::UpdateItem(
-                editing_item_id,
-                ItemMsg::FillRuleDeps(item_id),
-            )),
-            _ => None,
-        });
-
-        let handle_mouseover = self.link.callback(move |_| Msg::Focus(item_id));
-
-        // FIXME: performance - row마다 계산하면서 앞부분 계산 계속 중복됨. 캐싱 적용 방안 같은 것 찾기
-        let mut premise_nums: Vec<String> = self
-            .state
-            .derivation
-            .deps_for_item(item_id)
-            .unwrap_or_else(|| HashSet::new())
-            .iter()
-            .map(|&e| {
-                (self
-                    .state
-                    .derivation
-                    .index_for_item(e.id)
-                    .map_or(0, |n| n + 1))
-                .to_string()
-            })
-            .collect();
-        premise_nums.sort();
-
-        let rule_id_to_num = |i: &Option<i32>| {
-            if let Some(i) = i {
-                (self
-                    .state
-                    .derivation
-                    .index_for_item(*i)
-                    .map_or(0, |n| n + 1))
-                .to_string()
-            } else {
-                "_".to_owned()
-            }
-        };
-
-        html! {
-            <tr key={item.id} onmouseover=handle_mouseover class=classes!((self.state.focused == Some(item_id)).as_some("focused"))>
-                <td>{ format!("{{{}}}", premise_nums.join(",")) }</td>
-                <td onclick=handle_click_num>{ format!("{}", index + 1) }</td>
-                <td class=classes!(sentence_valid_class, "derivation-table--td-sentence")>
-                    { if let Mode::Readonly = self.state.mode { html! { item.sentence_text.clone()
-                    }} else { html! {
-                    <input
-                        type="text"
-                        value=item.sentence_text.clone()
-                        oninput=self.link.callback(move |e: InputData| {
-                            Msg::UpdateItem(item_id, ItemMsg::UpdateSentence(e.value))
-                        })
-                        onkeypress=handle_keypress
-                    />
-                    }}}
-                </td>
-                <td class=classes!(rule_valid_class)>{ match &item.rule {
-                    Some(rule) => rule_to_string(rule, rule_id_to_num, false),
-                    None => "".to_string(),
-                } }</td>
-                { if let Mode::Readonly = self.state.mode { html! {}} else { html!{
-                    <td>
-                    { self.view_item_edit_button(item_id) }
-                    { self.view_item_remove_button(item_id) }
-                </td>
-                } }}
-            </tr>
-        }
-    }
-
-    fn view_item_edit_button(&self, item_id: i32) -> Html {
-        let disabled = match self.state.mode {
-            Mode::Normal => false,
-            _ => true,
-        };
-        html! {
-            <button
-                onclick=self.link.callback(move |_| Msg::BeginRuleSelection { for_item_id: item_id })
-                disabled=disabled
-            >
-                {"edit rule"}
-            </button>
-        }
-    }
-
-    fn view_item_remove_button(&self, item_id: i32) -> Html {
-        let disabled = match self.state.mode {
-            Mode::Normal => false,
-            _ => true,
-        };
-        html! {
-            <button
-                onclick=self.link.callback(move |_| Msg::RemoveItem { id: item_id })
-                disabled=disabled
-            >
-                {"remove"}
-            </button>
-        }
-    }
-
     fn available_derivations_for(&self, item_id: &i32) -> Vec<(ApplyDerivationType, Derivation)> {
         if let Some(Ok(exp)) = self
             .state
