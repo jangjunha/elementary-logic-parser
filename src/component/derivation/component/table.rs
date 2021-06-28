@@ -4,12 +4,13 @@ use std::cmp::max;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
-use std::iter::{FromIterator, IntoIterator};
+use std::iter::FromIterator;
 use std::rc::Rc;
 use yew::prelude::*;
 
 use super::super::model::rule::to_string as rule_to_string;
 use super::super::model::{Derivation, DerivationItem, DerivationRule};
+use super::menu::Menu;
 use super::row::Row;
 use crate::parse::model::to_string as exp_to_string;
 use crate::service::derivation_store::DerivationStoreService;
@@ -396,7 +397,6 @@ impl Component for DerivationTable {
                         <Row
                             item=e.clone()
                             premise_ids=premise_ids
-                            index=i
                             format_id=Rc::clone(&format_id)
                             is_rule_valid=self.state.derivation.is_rule_valid(e)
                             is_focused=self.state.focused == Some(id)

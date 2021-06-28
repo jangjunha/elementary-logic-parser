@@ -11,7 +11,6 @@ use crate::component::derivation::model::DerivationItem;
 pub struct RowProps {
     pub item: DerivationItem,
     pub premise_ids: BTreeSet<i32>,
-    pub index: usize,
     pub format_id: Rc<BTreeMap<i32, String>>,
     pub is_rule_valid: bool,
     #[prop_or(false)]
@@ -61,7 +60,6 @@ impl Component for Row {
     }
 
     fn view(&self) -> Html {
-        let index = self.props.index;
         let item = &self.props.item;
         let sentence_valid_class = if item.is_valid_sentence() {
             "valid"
@@ -77,9 +75,9 @@ impl Component for Row {
             let format_id = Rc::clone(&self.props.format_id);
             move |i: &Option<i32>| {
                 if let Some(i) = i {
-                    format_id.get(i).unwrap_or(&i.to_string()).clone()
+                    format_id.get(i).unwrap_or(&format!("<{}>", i)).clone()
                 } else {
-                    "".to_owned()
+                    "_".to_owned()
                 }
             }
         };
@@ -105,8 +103,8 @@ impl Component for Row {
 
         html! {
             <tr key={item.id} onmouseover=handle_mouseover class=classes!((self.props.is_focused).as_some("focused"))>
-                <td>{ format!("{{{}}}", premise_nums) }</td>
-                <td onclick=handle_click_num>{ format!("{}", index + 1) }</td>
+                <td class="premise-nums">{ format!("{{{}}}", premise_nums) }</td>
+                <td onclick=handle_click_num class="num">{ format!("({})", format_id(&Some(item.id))) }</td>
                 <td class=classes!(sentence_valid_class, "derivation-table--td-sentence")>
                     { if self.props.is_readonly { html! { item.sentence_text.clone()
                     }} else { html! {
@@ -118,7 +116,7 @@ impl Component for Row {
                     />
                     }}}
                 </td>
-                <td class=classes!(rule_valid_class)>{ match &item.rule {
+                <td class=classes!(rule_valid_class, "rule")>{ match &item.rule {
                     Some(rule) => rule_to_string(rule, format_id, false),
                     None => "".to_string(),
                 } }</td>
