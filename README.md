@@ -1,4 +1,6 @@
-# elementary-logic-parser
+# elementary-logic-parser (outdated)
+
+<http://github.com/jangjunha/elementary-logic-validator>로 옮깁니다.
 
 ## Requirements
 
